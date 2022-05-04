@@ -1,19 +1,34 @@
+module Regex
+( RETree,
+  Regex,
+  LowerBound,
+  UpperBound,
+  pShow,
+  parseRegex,
+  trimFat
+) where
+
 import Text.Parsec
 import Text.Parsec.String
 import Data.List (intersperse)
+import Data.Maybe (catMaybes)
 
-
-type LowerBound = Int
-data UpperBound = Unlimited | Upper Int
 -- precedence decreases downward
+-- TODO : add capture group constructor
 data RETree = 
     Symbol Char
   | Repetition RETree LowerBound UpperBound
   | Concat [RETree]
   | Union [RETree]
+type LowerBound = Int
+data UpperBound = Unlimited | Upper Int
 
 instance Show RETree where
-    show reTree = "/" ++ pShow 4 reTree ++ "/"
+    show reTree = show (Regex reTree) -- TODO: implement 'show' as a tree
+
+newtype Regex = Regex { getRegex :: RETree }
+instance Show Regex where
+    show (Regex reTree) = "/" ++ pShow 0 reTree ++ "/"
 
 brackets :: Int -> Int -> String -> String
 brackets i j s
@@ -42,23 +57,37 @@ pShow i (Concat rs) = brackets i 2 . concat . map (pShow 2) $ rs
 
 pShow i (Union rs) = brackets i 1 . concat . intersperse "|" . map (pShow 1) $ rs
 
+-- '{' can optionally be treated literally in most dialects, 
+--     so long as it doesnt denote a range ,for example, "a{1,2}"
+-- these 12 are the same amongst most popular modern RE dialects
+metaChars = "\\^$.|?*+()[{"
 type REParser = Parsec String () RETree
 
+-- TODO: parse quantifiers: *+?
+-- TODO: capture groups with id:  ()
+-- TODO: escaped characters & classes: \w, \t, \n
+-- TODO: character classes: [a-zA-Z], etc
+-- TODO: negated classes: [^a-z], etc
+-- TODO: possesive & lazy quantifiers?
+
 parseRegex :: REParser
-parseRegex = between (char '/') (char '/') parseUnion
+parseRegex = do
+    re <- parseUnion
+    eof
+    return re
 
 parsePrimary :: REParser
 parsePrimary = choice $ try <$> 
     [(between (char '(') (char ')') parseUnion),
-     Symbol <$> (char '\\' >> anyChar),
-     Symbol <$> noneOf ")|/"] -- i.e. dont go past this bracket group or union element or end-of-regex '/'
+     Symbol <$> (char '\\' >> oneOf metaChars), 
+     Symbol <$> noneOf metaChars] 
 
 parseRepetition :: REParser
 parseRepetition = do
     prim <- parsePrimary
     range <- optionMaybe . try $ parseRange
     case range of Just (lower, upper) -> return (Repetition prim lower upper)
-                  Nothing             -> return prim
+                  Nothing             -> return (Repetition prim 1 (Upper 1))
 
 parseRange :: Parsec String () (LowerBound, UpperBound)
 parseRange = do
@@ -75,13 +104,26 @@ parseRange = do
     where parseInt = (read :: String -> LowerBound) <$> many1 digit
 
 parseConcat :: REParser
-parseConcat = do
-    repList <- many parseRepetition
-    case repList of [r]  -> return r
-                    list -> return (Concat list)
+parseConcat = Concat <$> many parseRepetition
                        
 parseUnion :: REParser
-parseUnion = do
-    unionList <- sepBy parseConcat (char '|')
-    case unionList of [r]  -> return r
-                      list -> return (Union list)
+parseUnion = Union <$> sepBy parseConcat (char '|')
+
+
+trimFat :: RETree -> Maybe RETree
+trimFat (Symbol s) = Just (Symbol s)
+
+trimFat (Repetition reNode 1 (Upper 1)) = trimFat reNode
+trimFat (Repetition reNode 0 (Upper 0)) = Nothing
+trimFat (Repetition reNode lower upper) = 
+    (\x -> Repetition x lower upper) <$> (trimFat reNode)
+
+trimFat (Concat [reNode]) = trimFat reNode
+trimFat (Concat reNodes ) = let trimmed = catMaybes (trimFat <$> reNodes)
+                            in  case trimmed of [] -> Nothing
+                                                reNodes -> Just (Concat reNodes)
+
+trimFat (Union [reNode]) = trimFat reNode
+trimFat (Union reNodes ) = let trimmed = catMaybes (trimFat <$> reNodes)
+                           in  case trimmed of [] -> Nothing
+                                               reNodes -> Just (Union reNodes)
