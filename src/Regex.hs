@@ -1,10 +1,14 @@
 module Regex
-( RETree,
+( RETree (Symbol, Repetition, Concat, Union),
   Regex,
   LowerBound,
   UpperBound,
   unparse,
   parseRegex,
+  parseUnion,
+  parseConcat,
+  parseRepetition,
+  parsePrimary,
   trimFat
 ) where
 
@@ -14,7 +18,8 @@ import Data.List (intersperse)
 import Data.Maybe (catMaybes)
 
 -- precedence decreases downward
--- TODO : add capture group constructor
+-- TODO: add capture group constructor
+-- TODO: add Null/Nothing constructor?
 data RETree = 
     Symbol Char
   | Repetition RETree LowerBound UpperBound
@@ -25,6 +30,18 @@ data UpperBound = Unlimited | Upper Int
 
 instance Show RETree where
     show reTree = show (Regex reTree) -- TODO: implement 'show' as a tree
+
+instance Eq UpperBound where
+    Unlimited == Unlimited = True
+    Upper a == Upper b = a == b
+instance Eq RETree where
+    Symbol a == Symbol b = a == b
+    Repetition ra la ua == Repetition rb lb ub = 
+      ra == rb && la == lb && ua == ub
+    Concat nodesA == Concat nodesB =
+      all (\(a,b) -> a == b) $ zip nodesA nodesB
+    Union nodesA == Concat nodesB =
+      all (\(a,b) -> a == b) $ zip nodesA nodesB
 
 newtype Regex = Regex { getRegex :: RETree }
 instance Show Regex where
