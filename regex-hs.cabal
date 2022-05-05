@@ -7,11 +7,11 @@ cabal-version: 1.12
 name:           regex-hs
 version:        0.1.0.0
 description:    Please see the README on GitHub at <https://github.com/githubuser/regex-hs#readme>
-homepage:       https://github.com/githubuser/regex-hs#readme
-bug-reports:    https://github.com/githubuser/regex-hs/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2022 Author name here
+homepage:       https://github.com/github.com/elliotheisler#readme
+bug-reports:    https://github.com/github.com/elliotheisler/issues
+author:         Elliot Heisler
+maintainer:     elliotheisler9@gmail.com
+copyright:      2022 Elliot Heisler
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -21,11 +21,12 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/regex-hs
+  location: https://github.com/github.com/elliotheisler
 
 library
   exposed-modules:
       Lib
+      Regex
   other-modules:
       Paths_regex_hs
   hs-source-dirs:

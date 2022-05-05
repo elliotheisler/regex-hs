@@ -3,7 +3,7 @@ module Regex
   Regex,
   LowerBound,
   UpperBound,
-  pShow,
+  unparse,
   parseRegex,
   trimFat
 ) where
@@ -28,34 +28,34 @@ instance Show RETree where
 
 newtype Regex = Regex { getRegex :: RETree }
 instance Show Regex where
-    show (Regex reTree) = "/" ++ pShow 0 reTree ++ "/"
+    show (Regex reTree) = "/" ++ unparse 0 reTree ++ "/"
 
 brackets :: Int -> Int -> String -> String
 brackets i j s
   | i >= j = "("++s++")"
   | otherwise = s
 
-{- precedence-Show. convert this regex tree to is string form, making sure
- - to place it in brackets to show precedence
- - if its parent has higher-or-equal precedence -}
-pShow :: Int -> RETree -> String
-pShow i (Symbol c) = [c]
+{- unparse: convert this regex tree to is string-regex form, making sure
+ - to place it in brackets to show precedence if its parent has higher-or-equal 
+ - precedence -}
+unparse :: Int -> RETree -> String
+unparse i (Symbol c) = [c]
 
-pShow i (Repetition reNode lower Unlimited)
+unparse i (Repetition reNode lower Unlimited)
   | lower == 1 = brkts $ ps reNode ++ "+"
   | lower == 0 = brkts $ ps reNode ++ "*"
   | otherwise  = brkts $ ps reNode ++ "{" ++ show lower ++ ",}"
   where brkts = brackets i 3
-        ps    = pShow 3
-pShow i (Repetition reNode lower (Upper upper))
+        ps    = unparse 3
+unparse i (Repetition reNode lower (Upper upper))
   | lower == upper = brkts $ ps reNode ++ "{" ++ show lower ++ "}"
   | otherwise = brkts $ ps reNode ++ "{" ++ show lower ++ "," ++ show upper ++ "}"
   where brkts = brackets i 3
-        ps    = pShow 3
+        ps    = unparse 3
 
-pShow i (Concat rs) = brackets i 2 . concat . map (pShow 2) $ rs
+unparse i (Concat rs) = brackets i 2 . concat . map (unparse 2) $ rs
 
-pShow i (Union rs) = brackets i 1 . concat . intersperse "|" . map (pShow 1) $ rs
+unparse i (Union rs) = brackets i 1 . concat . intersperse "|" . map (unparse 1) $ rs
 
 -- '{' can optionally be treated literally in most dialects, 
 --     so long as it doesnt denote a range ,for example, "a{1,2}"
