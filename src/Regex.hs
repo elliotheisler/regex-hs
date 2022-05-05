@@ -105,7 +105,10 @@ parseRange = do
             upper <- optionMaybe . try $ parseInt
             char '}'
             case upper of Nothing -> return (lower, Unlimited)
-                          Just u  -> return (lower, Upper u  )
+                          Just u  -> 
+                              if u >= lower 
+                              then return (lower, Upper u  ) 
+                              else fail "upper bound must be greater than lower"
     where parseInt = (read :: String -> LowerBound) <$> many1 digit
 
 parseConcat :: REParser
