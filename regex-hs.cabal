@@ -55,6 +55,7 @@ test-suite regex-hs-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      TestRegex
       Paths_regex_hs
   hs-source-dirs:
       test

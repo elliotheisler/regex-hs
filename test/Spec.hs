@@ -1,3 +1,4 @@
-import Test.QuickCheck (quickCheck)
+import TestRegex
+import Test.QuickCheck (quickCheckAll)
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = do { runTests; return () }
