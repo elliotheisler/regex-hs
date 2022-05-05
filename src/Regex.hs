@@ -1,16 +1,4 @@
-module Regex
-( RETree (Symbol, Repetition, Concat, Union),
-  Regex,
-  LowerBound,
-  UpperBound,
-  unparse,
-  parseRegex,
-  parseUnion,
-  parseConcat,
-  parseRepetition,
-  parsePrimary,
-  trimFat
-) where
+module Regex where
 
 import Text.Parsec
 import Text.Parsec.String
