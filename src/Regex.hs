@@ -16,12 +16,12 @@ data RETree =
 type LowerBound = Int
 data UpperBound = Unlimited | Upper Int
 
+instance Read RETree where
+    read 
+
 instance Show RETree where
     show reTree = show (Regex reTree) -- TODO: implement 'show' as a tree
 
-instance Eq UpperBound where
-    Unlimited == Unlimited = True
-    Upper a == Upper b = a == b
 instance Eq RETree where
     Symbol a == Symbol b = a == b
     Repetition ra la ua == Repetition rb lb ub = 
@@ -30,6 +30,10 @@ instance Eq RETree where
       all (\(a,b) -> a == b) $ zip nodesA nodesB
     Union nodesA == Concat nodesB =
       all (\(a,b) -> a == b) $ zip nodesA nodesB
+
+instance Eq UpperBound where
+    Unlimited == Unlimited = True
+    Upper a == Upper b = a == b
 
 newtype Regex = Regex { getRegex :: RETree }
 instance Show Regex where

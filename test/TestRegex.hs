@@ -34,11 +34,12 @@ prop_MetaChar1 c = (parseAll parsePrimary ['\\', c] == Right (Symbol c)) ==
 prop_RepetitionGreaterThan :: Char -> QC.NonNegative Int -> QC.NonNegative Int -> Property
 prop_RepetitionGreaterThan c (QC.NonNegative l) (QC.NonNegative u) = 
   l <= u && not (c `elem` metaChars) ==> 
-    (parseAll parseRepetition $ [c]++"{"++(show l)++","++(show u)++"}") == 
+    (parseAll parseRepetition $ [c] ++ "{" ++ (show l) ++ "," ++ (show u) ++ "}") == 
       Right (Repetition (Symbol c) l (Upper u))
 prop_RepetitionLessThan :: Char -> QC.NonNegative Int -> QC.NonNegative Int -> Property
 prop_RepetitionLessThan c (QC.NonNegative l) (QC.NonNegative u) = 
-    l > u ==> (isLeft . parseAll parseRepetition $ [c]++"{"++(show l)++","++(show u)++"}")
+    l > u ==> 
+      (isLeft . parseAll parseRepetition $ [c] ++ "{" ++ (show l) ++ "," ++ (show u) ++ "}")
 
 return []
 runTests = $quickCheckAll
