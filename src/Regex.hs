@@ -33,10 +33,10 @@ instance PrintableTree RETree String where
     nodeContents (Concat _) = "(++)"
     nodeContents (Union  _) = "(|)"
 
-    getLeftRight (Symbol c) = ([], [])
-    getLeftRight (Repetition reTree l u) = ([], [reTree])
-    getLeftRight (Concat reTrees) = splitAt (length reTrees `div` 2) reTrees
-    getLeftRight (Union reTrees ) = splitAt (length reTrees `div` 2) reTrees
+    getForest (Symbol _) = []
+    getForest (Repetition reTree _ _) = [reTree]
+    getForest (Concat reTrees) = reTrees
+    getForest (Union  reTrees) = reTrees
 
 instance Show RETree where
     show = treeShow

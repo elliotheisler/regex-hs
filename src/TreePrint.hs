@@ -3,16 +3,32 @@
 {-# LANGUAGE FlexibleInstances #-}
 module TreePrint where
 
-import Data.List (intersperse, intercalate)
+import Data.List (intersperse, intercalate, null)
+import Data.Maybe (catMaybes, isNothing, maybeToList, listToMaybe, fromMaybe)
+import Data.Bool  (bool)
 
 class (Show a) => PrintableTree t a | t -> a where
+  {- minimal definition: 
+     nodeContents & getForest | getLeftMiddleRight | (getLeftForest & getMiddleForest & getRightForest)
+  -}
     nodeContents :: t -> a
-    getLeftRight :: t -> ([t], [t])
+    getLeftMiddleRight :: t -> ([t], Maybe t, [t])
+    getForest :: t -> [t]
     getLeftForest :: t -> [t]
+    getMiddleForest :: t -> Maybe t
     getRightForest :: t -> [t]
-    getLeftRight t = (getLeftForest t, getRightForest t)
-    getLeftForest  = fst . getLeftRight
-    getRightForest = snd . getLeftRight
+
+    getForest = (\ (l,m,r) -> l ++ (maybeToList m) ++ r) . getLeftMiddleRight
+    getLeftMiddleRight t = 
+      let trees = getForest t
+          (l,r)  = splitAt (length trees `div` 2) trees
+          (m,r') = case r of []       -> (Nothing, r  )
+                             (h:tail) -> (Just h, tail)
+      in  (l,m,r')
+    getLeftMiddleRight t = (getLeftForest t, getMiddleForest t, getRightForest t)
+    getLeftForest   = (\ (l,_,_) -> l) . getLeftMiddleRight
+    getMiddleForest = (\ (_,m,_) -> m) . getLeftMiddleRight
+    getRightForest  = (\ (_,_,r) -> r) . getLeftMiddleRight
 
 -- ExampleTree data, left branches, and right branches
 data ExampleTree    = ExampleTree  String [ExampleTree] [ExampleTree]
@@ -20,11 +36,17 @@ data ExampleTree2 a = ExampleTree2 a [ExampleTree2 a] [ExampleTree2 a]
 
 instance PrintableTree ExampleTree String where
     nodeContents (ExampleTree s _ _) = s
-    getLeftRight (ExampleTree s lTrees rTrees) = (lTrees, rTrees)
+    getLeftMiddleRight (ExampleTree s lTrees rTrees) = (lTrees, mTree, rTrees)
+      where
+        (maybeMiddle,rTree) = splitAt 0 rTrees
+        mTree = listToMaybe maybeMiddle
 -- NOTE: the '(Show a) =>' is necessary in both the class and the instance
 instance (Show a) => PrintableTree (ExampleTree2 a) a where
     nodeContents (ExampleTree2 s _ _) = s
-    getLeftRight (ExampleTree2 s lTrees rTrees) = (lTrees, rTrees)
+    getLeftMiddleRight (ExampleTree2 s lTrees rTrees) = (lTrees, mTree, rTrees)
+      where
+        (maybeMiddle,rTree) = splitAt 0 rTrees
+        mTree = listToMaybe maybeMiddle
 
 type CharGrid = [String]
 
@@ -69,28 +91,89 @@ wideShow (ExampleTree s lTrees rTrees) =
     whiteSpL  = replicate (width leftRepr ) ' '
     whiteSpR  = replicate (width rightRepr) ' '
 
+data Adjacency = N | S | E | W deriving (Eq)
+
+{- "boxChar": given a list of adjacency values, 
+    get the corresponding unicode box-drawing character.
+    - order shouldn't matter the way i ordered the guards
+-}
+bC :: [Adjacency] -> Char
+bC ls
+    | ls `contains` [N,S,E,W] = '\x253c'
+    | ls `contains` [  S,E,W] = '\x252c'
+    | ls `contains` [N,  E,W] = '\x2534'
+    | ls `contains` [N,S,  W] = '\x2524'
+    | ls `contains` [N,S,E  ] = '\x251c'
+    | ls `contains` [    E,W] = '\x2500'
+    | ls `contains` [  S,  W] = '\x2510'
+    | ls `contains` [N,    W] = '\x2518'
+    | ls `contains` [  S,E  ] = '\x250c'
+    | ls `contains` [N,  E  ] = '\x2514'
+    | ls `contains` [N,S    ] = '\x2502'
+    -- single-char cases unused
+    | ls `contains` [      W] = '*'
+    | ls `contains` [    E  ] = '*'
+    | ls `contains` [  S    ] = '*'
+    | ls `contains` [N      ] = '*'
+    | ls `contains` [       ] = ' '
+  where
+    contains :: (Eq a) => [a] -> [a] -> Bool
+    -- true iff every list element in bs occurs in as
+    contains as bs = all (`elem` as) bs
+
 treeShow :: (PrintableTree t a) => t -> String
-treeShow = toStr . (\ (t,m,b) -> t++m++b) . treeShow'
-  where toStr = intercalate "\n"
+treeShow = toStr . toGridStack . treeShow'
+  where 
+    toStr :: CharGrid -> String
+    toStr = intercalate "\n"
+    toGridStack :: TopMidBot -> CharGrid
+    toGridStack (t,m,b) = t++m++b
 
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
+
 data TMB = Top | Middle | Bottom
 
-treeShow' :: (PrintableTree t a) => t -> TopMidBot
-treeShow' t =
-    ( padLefts lChildren
-    , [contents ++ getRoot lTrees rTrees]
+treeShow' :: (PrintableTree tree a) => tree -> TopMidBot
+treeShow' tree =
+    ( padLefts  lChildren
+    , padMiddle mChild
     , padRights rChildren
     )
   where
-    (lTrees, rTrees) = getLeftRight t
-    contents = show . nodeContents $ t
+    (lTrees, mTree, rTrees) = getLeftMiddleRight tree
+
     lChildren = treeShow' <$> lTrees :: [TopMidBot]
+    mChild    = treeShow' <$> mTree  :: Maybe TopMidBot
     rChildren = treeShow' <$> rTrees :: [TopMidBot]
 
-    padLefts  = map (wSpace++) . concatPadBranches Top    addBranchMid addBranchTop
-    padRights = map (wSpace++) . concatPadBranches Bottom addBranchMid addBranchBot
-    wSpace = replicate (length contents) ' '
+    contents = show . nodeContents $ tree
+    wSpace   = replicate (length contents) ' '
+
+    padLefts l  = 
+      map (wSpace++) . concatPadBranches Top addBranchTopMid addBranchTopTop $ l
+    padMiddle m = 
+        map (contents++) . concatPadBranches Middle allCase allCase . pure . fromMaybe ([],[""],[]) $ m
+      where 
+        allCase = addBranchChars midTopChar midMidChar midBotChar
+          where
+            midTopChar = bC $ if null lChildren 
+                              then [] :: [Adjacency]
+                              else [N,S]
+            midMidChar = bC . catMaybes $
+              [ if null   lChildren then Nothing else Just N
+              , if isNothing mChild    then Nothing else Just E
+              , if null   rChildren then Nothing else Just S
+              , if null lChildren && isNothing mChild && null rChildren 
+                then Nothing 
+                else Just W
+              ]
+            midBotChar = bC $ if null rChildren 
+                              then [] 
+                              else [N,S]
+    padRights r = 
+      map (wSpace++) . concatPadBranches Bottom addBranchBotMid addBranchBotBot $ r
+
+
     concatPadBranches :: TMB
                       -> (TopMidBot -> TopMidBot) 
                       -> (TopMidBot -> TopMidBot) 
@@ -100,38 +183,39 @@ treeShow' t =
     concatPadBranches topOrBot midCase endCase sections@(h:tail) = 
         let padded = case topOrBot of
                      Top    -> [endCase h] ++ (midCase <$> tail)
+                     Middle -> midCase <$> sections -- singleton list
                      Bottom -> let (init, (l:_)) = splitAt (length sections - 1) sections
                                in  (midCase <$> init) ++ [endCase l]
-        in  concat $ (\ (t,m,b) -> t++m++b) <$> padded :: CharGrid
+        in  concat $ (\ (tree,m,b) -> tree++m++b) <$> padded :: CharGrid
 
-    addBranchMid = addBranchChars arm armBranch arm
-    addBranchTop = addBranchChars ' ' cornerTop arm
-    addBranchBot = addBranchChars arm cornerBot ' '
+    -- cases for top/left forest
+    addBranchTopMid = addBranchChars (bC [N,S]) (bC [N,S,E]) (bC [N,S])
+    addBranchTopTop = addBranchChars (bC []) (bC [S,E]) (bC [N,S])
+    addBranchTopBot = addBranchTopMid
+    -- cases for bottom/right forest
+    addBranchBotMid = addBranchTopMid
+    addBranchBotTop = addBranchBotMid
+    addBranchBotBot = addBranchChars (bC [N,S]) (bC [N,E]) (bC [])
+
     addBranchChars :: Char -> Char -> Char -> (TopMidBot -> TopMidBot)
-    addBranchChars topChar midChar botChar (t,m,b) =
-      ( (topChar:) <$> t
+    addBranchChars topChar midChar botChar (tree,m,b) =
+      ( (topChar:) <$> tree
       , (midChar:) <$> m
       , (botChar:) <$> b
       )
 
-    cornerTop = '\x250c'
-    cornerBot = '\x2514'
-    arm       = '\x2502'
-    armBranch = '\x251c'
 
-    getRoot :: (PrintableTree t a) => [t] -> [t] -> String
-    getRoot [] [] = " "
-    getRoot [] r  = "\x2510"
-    getRoot l  [] = "\x2518"
-    getRoot l  r  = "\x2524"
-
-
--- main :: IO ()
--- main = do
---     let b = ExampleTree "b" [(ExampleTree "br" [] [])] []
---     let c = ExampleTree "cee" [(ExampleTree "cl" [] []), (ExampleTree "cll" [] [])] [(ExampleTree "cr" [] [])]
---     let t = ExampleTree "R" 
---             [b, (ExampleTree "aaaaa" [] [])] 
---             [c, b]
---     putLong c
---     putLong t
+main :: IO ()
+main = do
+    let a = ExampleTree "$" [] []
+    let b = ExampleTree "b" [(ExampleTree "br" [] [])] []
+    let c = ExampleTree "cee" [(ExampleTree "cl" [] []), (ExampleTree "cll" [] [])] [(ExampleTree "cr" [] [])]
+    let tree = ExampleTree "R" 
+            [b, (ExampleTree "aaaaa" [] [])] 
+            [c, b]
+    p a
+    p c
+    p tree
+  where
+    p :: ExampleTree -> IO ()
+    p = putStrLn . treeShow
