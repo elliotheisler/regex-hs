@@ -1,4 +1,8 @@
 import TestRegex
+import TestPrintRegex (testPrintRegex)
 import Test.QuickCheck (quickCheckAll)
 main :: IO ()
-main = do { runTests; return () }
+main = do
+    runTests
+    testPrintRegex
+    return ()

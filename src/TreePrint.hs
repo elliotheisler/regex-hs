@@ -1,7 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
-
 module TreePrint where
 
 import Data.List (intersperse, intercalate)
@@ -70,13 +69,15 @@ wideShow (ExampleTree s lTrees rTrees) =
     whiteSpL  = replicate (width leftRepr ) ' '
     whiteSpR  = replicate (width rightRepr) ' '
 
-putWide = putStrLn . prettyStrRepr . wideShow
+treeShow :: (PrintableTree t a) => t -> String
+treeShow = prettyStrRepr . (\ (t,m,b) -> t++m++b) . treeShow'
+prettyStrRepr = intercalate "\n"
 
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
 data TMB = Top | Middle | Bottom
 
-longShow :: (PrintableTree t a) => t -> TopMidBot
-longShow t =
+treeShow' :: (PrintableTree t a) => t -> TopMidBot
+treeShow' t =
     ( padLefts lChildren
     , [contents ++ getRoot lTrees rTrees]
     , padRights rChildren
@@ -84,8 +85,8 @@ longShow t =
   where
     (lTrees, rTrees) = getLeftRight t
     contents = show . nodeContents $ t
-    lChildren = longShow <$> lTrees :: [TopMidBot]
-    rChildren = longShow <$> rTrees :: [TopMidBot]
+    lChildren = treeShow' <$> lTrees :: [TopMidBot]
+    rChildren = treeShow' <$> rTrees :: [TopMidBot]
 
     padLefts  = map (wSpace++) . concatPadBranches Top    addBranchMid addBranchTop
     padRights = map (wSpace++) . concatPadBranches Bottom addBranchMid addBranchBot
@@ -124,18 +125,13 @@ longShow t =
     getRoot l  [] = "\x2518"
     getRoot l  r  = "\x2524"
 
-putLong :: (PrintableTree t a) => t -> IO ()
-putLong = putStrLn . prettyStrRepr . (\ (t,m,b) -> t++m++b) . longShow 
 
-prettyStrRepr = intercalate "\n"
-
-
-main :: IO ()
-main = do
-    let b = ExampleTree "b" [(ExampleTree "br" [] [])] []
-    let c = ExampleTree "cee" [(ExampleTree "cl" [] []), (ExampleTree "cll" [] [])] [(ExampleTree "cr" [] [])]
-    let t = ExampleTree "R" 
-            [b, (ExampleTree "aaaaa" [] [])] 
-            [c, b]
-    putLong c
-    putLong t
+-- main :: IO ()
+-- main = do
+--     let b = ExampleTree "b" [(ExampleTree "br" [] [])] []
+--     let c = ExampleTree "cee" [(ExampleTree "cl" [] []), (ExampleTree "cll" [] [])] [(ExampleTree "cr" [] [])]
+--     let t = ExampleTree "R" 
+--             [b, (ExampleTree "aaaaa" [] [])] 
+--             [c, b]
+--     putLong c
+--     putLong t

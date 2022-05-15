@@ -1,9 +1,14 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Regex where
 
 import Text.Parsec
 import Text.Parsec.String
 import Data.List (intersperse)
 import Data.Maybe (catMaybes)
+
+import TreePrint
 
 -- precedence decreases downward
 -- TODO: add capture group constructor
@@ -16,8 +21,25 @@ data RETree =
 type LowerBound = Int
 data UpperBound = Unlimited | Upper Int
 
+instance PrintableTree RETree String where
+    nodeContents (Symbol c) = [c]
+    nodeContents (Repetition _ l (Upper u))
+      | l == 0 && u == 1 = "?"
+      | l == u           = "{" ++ show l ++ "}"
+      | otherwise        = "{" ++ show l ++ "," ++ show u ++ "}"
+    nodeContents (Repetition _ l Unlimited) 
+      | l == 0 = "*"
+      | l == 1 = "+"
+    nodeContents (Concat _) = "(++)"
+    nodeContents (Union  _) = "(|)"
+
+    getLeftRight (Symbol c) = ([], [])
+    getLeftRight (Repetition reTree l u) = ([], [reTree])
+    getLeftRight (Concat reTrees) = splitAt (length reTrees `div` 2) reTrees
+    getLeftRight (Union reTrees ) = splitAt (length reTrees `div` 2) reTrees
+
 instance Show RETree where
-    show reTree = show (Regex reTree) -- TODO: implement 'show' as a tree
+    show = treeShow
 
 instance Eq RETree where
     Symbol a == Symbol b = a == b
@@ -136,3 +158,12 @@ trimFat (Union [reNode]) = trimFat reNode
 trimFat (Union reNodes ) = let trimmed = catMaybes (trimFat <$> reNodes)
                            in  case trimmed of [] -> Nothing
                                                reNodes -> Just (Union reNodes)
+
+
+-- main :: IO ()
+-- main = do
+--     let email = fromRight (Symbol '_') . parse parseRegex "" $ "(A|B|C|D|E|a|b|c|d|e|_){1,}@(gmail|hotmail|outlook|aol)\\.(com|org|net)"
+--     let emailTrimmed = fromMaybe (Symbol '_') $ trimFat email
+--     print email
+--     print emailTrimmed
+
