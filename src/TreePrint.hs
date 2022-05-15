@@ -1,9 +1,32 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module TreePrint where
 
 import Data.List (intersperse, intercalate)
 
--- tree data, left branches, and right branches
-data Tree = Tree String [Tree] [Tree]
+class (Show a) => PrintableTree t a | t -> a where
+    nodeContents :: t -> a
+    getLeftRight :: t -> ([t], [t])
+    getLeftForest :: t -> [t]
+    getRightForest :: t -> [t]
+    getLeftRight t = (getLeftForest t, getRightForest t)
+    getLeftForest  = fst . getLeftRight
+    getRightForest = snd . getLeftRight
+
+-- ExampleTree data, left branches, and right branches
+data ExampleTree    = ExampleTree  String [ExampleTree] [ExampleTree]
+data ExampleTree2 a = ExampleTree2 a [ExampleTree2 a] [ExampleTree2 a]
+
+instance PrintableTree ExampleTree String where
+    nodeContents (ExampleTree s _ _) = s
+    getLeftRight (ExampleTree s lTrees rTrees) = (lTrees, rTrees)
+-- NOTE: the '(Show a) =>' is necessary in both the class and the instance
+instance (Show a) => PrintableTree (ExampleTree2 a) a where
+    nodeContents (ExampleTree2 s _ _) = s
+    getLeftRight (ExampleTree2 s lTrees rTrees) = (lTrees, rTrees)
+
 type CharGrid = [String]
 
 -- TODO: could make tail-recursive
@@ -37,8 +60,8 @@ trConcat :: [CharGrid] -> CharGrid
 trConcat [] = []
 trConcat l  = foldl1 trAppend l
 
-wideShow :: Tree -> CharGrid
-wideShow (Tree s lTrees rTrees) =
+wideShow :: ExampleTree -> CharGrid
+wideShow (ExampleTree s lTrees rTrees) =
     [whiteSpL `sep` s `sep` whiteSpR] ++
     trConcat [leftRepr, [replicate (length s) ' '], rightRepr]
   where
@@ -50,30 +73,35 @@ wideShow (Tree s lTrees rTrees) =
 putWide = putStrLn . prettyStrRepr . wideShow
 
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
+data TMB = Top | Middle | Bottom
 
-longShow :: Tree -> TopMidBot
-longShow (Tree s lTrees rTrees) =
+longShow :: (PrintableTree t a) => t -> TopMidBot
+longShow t =
     ( padLefts lChildren
-    , [s ++ getRoot lTrees rTrees]
+    , [contents ++ getRoot lTrees rTrees]
     , padRights rChildren
     )
   where
+    (lTrees, rTrees) = getLeftRight t
+    contents = show . nodeContents $ t
     lChildren = longShow <$> lTrees :: [TopMidBot]
     rChildren = longShow <$> rTrees :: [TopMidBot]
-    wSpace = replicate (length s) ' '
 
-    padLefts  = map (wSpace++) . concatPadBranches addBranchTop addBranchMid addBranchMid
-    padRights = map (wSpace++) . concatPadBranches addBranchMid addBranchMid addBranchBot
-    concatPadBranches :: (TopMidBot -> TopMidBot) 
+    padLefts  = map (wSpace++) . concatPadBranches Top    addBranchMid addBranchTop
+    padRights = map (wSpace++) . concatPadBranches Bottom addBranchMid addBranchBot
+    wSpace = replicate (length contents) ' '
+    concatPadBranches :: TMB
                       -> (TopMidBot -> TopMidBot) 
                       -> (TopMidBot -> TopMidBot) 
                       -> [TopMidBot] 
                       -> CharGrid
     concatPadBranches _ _ _ [] = []
-    concatPadBranches topCase midCase botCase (h:tail) =
-      let (body,last) = splitAt (length tail - 1) tail -- we now have the head, body, and last
-          padded       = [topCase h] ++ (midCase <$> body) ++ (botCase <$> last) :: [TopMidBot]
-      in  concat $ (\ (t,m,b) -> t++m++b) <$> padded :: CharGrid
+    concatPadBranches topOrBot midCase endCase sections@(h:tail) = 
+        let padded = case topOrBot of
+                     Top    -> [endCase h] ++ (midCase <$> tail)
+                     Bottom -> let (init, (l:_)) = splitAt (length sections - 1) sections
+                               in  (midCase <$> init) ++ [endCase l]
+        in  concat $ (\ (t,m,b) -> t++m++b) <$> padded :: CharGrid
 
     addBranchMid = addBranchChars arm armBranch arm
     addBranchTop = addBranchChars ' ' cornerTop arm
@@ -90,23 +118,24 @@ longShow (Tree s lTrees rTrees) =
     arm       = '\x2502'
     armBranch = '\x251c'
 
-    getRoot :: [Tree] -> [Tree] -> String
+    getRoot :: (PrintableTree t a) => [t] -> [t] -> String
     getRoot [] [] = " "
     getRoot [] r  = "\x2510"
     getRoot l  [] = "\x2518"
     getRoot l  r  = "\x2524"
-    
-    
 
-putLong = putStrLn . prettyStrRepr . (\ (t,m,b) -> t++m++b) . longShow
-    
+putLong :: (PrintableTree t a) => t -> IO ()
+putLong = putStrLn . prettyStrRepr . (\ (t,m,b) -> t++m++b) . longShow 
 
 prettyStrRepr = intercalate "\n"
 
-instance Show Tree where
-    show = prettyStrRepr . wideShow
 
 main :: IO ()
 main = do
-    let t = Tree "R" [(Tree "a" [] []), (Tree "b" [] [])] [(Tree "c" [] []), (Tree "d" [(Tree "f" [] [])] [])]
+    let b = ExampleTree "b" [(ExampleTree "br" [] [])] []
+    let c = ExampleTree "cee" [(ExampleTree "cl" [] []), (ExampleTree "cll" [] [])] [(ExampleTree "cr" [] [])]
+    let t = ExampleTree "R" 
+            [b, (ExampleTree "aaaaa" [] [])] 
+            [c, b]
+    putLong c
     putLong t

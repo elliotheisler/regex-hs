@@ -16,9 +16,6 @@ data RETree =
 type LowerBound = Int
 data UpperBound = Unlimited | Upper Int
 
-instance Read RETree where
-    read 
-
 instance Show RETree where
     show reTree = show (Regex reTree) -- TODO: implement 'show' as a tree
 

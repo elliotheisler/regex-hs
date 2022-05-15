@@ -8,7 +8,7 @@ import Text.Parsec
 import Regex
 import Data.Either (isLeft)
 
-{- helper function for tests. ensure the whole string must be parsed -}
+{- helper function for tests. ensures the whole string must be parsed -}
 parseAll :: REParser -> String -> Either ParseError RETree
 parseAll parser = parse (entireString parser) ""
 
