@@ -70,8 +70,8 @@ wideShow (ExampleTree s lTrees rTrees) =
     whiteSpR  = replicate (width rightRepr) ' '
 
 treeShow :: (PrintableTree t a) => t -> String
-treeShow = prettyStrRepr . (\ (t,m,b) -> t++m++b) . treeShow'
-prettyStrRepr = intercalate "\n"
+treeShow = toStr . (\ (t,m,b) -> t++m++b) . treeShow'
+  where toStr = intercalate "\n"
 
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
 data TMB = Top | Middle | Bottom
