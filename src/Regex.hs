@@ -22,6 +22,8 @@ type LowerBound = Int
 data UpperBound = Unlimited | Upper Int
 
 instance PrintableTree RETree String where
+    nodeStrContents = nodeContents
+    
     nodeContents (Symbol c) = [c]
     nodeContents (Repetition _ l (Upper u))
       | l == 0 && u == 1 = "?"

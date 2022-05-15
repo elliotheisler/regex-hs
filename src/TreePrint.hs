@@ -12,6 +12,7 @@ class (Show a) => PrintableTree t a | t -> a where
      nodeContents & getForest | getLeftMiddleRight | (getLeftForest & getMiddleForest & getRightForest)
   -}
     nodeContents :: t -> a
+    nodeStrContents :: t -> String
     getLeftMiddleRight :: t -> ([t], Maybe t, [t])
     getForest :: t -> [t]
     getLeftForest :: t -> [t]
@@ -29,6 +30,8 @@ class (Show a) => PrintableTree t a | t -> a where
     getLeftForest   = (\ (l,_,_) -> l) . getLeftMiddleRight
     getMiddleForest = (\ (_,m,_) -> m) . getLeftMiddleRight
     getRightForest  = (\ (_,_,r) -> r) . getLeftMiddleRight
+
+    nodeStrContents = show . nodeContents
 
 -- ExampleTree data, left branches, and right branches
 data ExampleTree    = ExampleTree  String [ExampleTree] [ExampleTree]
@@ -146,7 +149,7 @@ treeShow' tree =
     mChild    = treeShow' <$> mTree  :: Maybe TopMidBot
     rChildren = treeShow' <$> rTrees :: [TopMidBot]
 
-    contents = show . nodeContents $ tree
+    contents = nodeStrContents $ tree
     wSpace   = replicate (length contents) ' '
 
     padLefts l  = 
@@ -186,7 +189,7 @@ treeShow' tree =
                      Middle -> midCase <$> sections -- singleton list
                      Bottom -> let (init, (l:_)) = splitAt (length sections - 1) sections
                                in  (midCase <$> init) ++ [endCase l]
-        in  concat $ (\ (tree,m,b) -> tree++m++b) <$> padded :: CharGrid
+        in  concat $ (\ (t,m,b) -> t++m++b) <$> padded :: CharGrid
 
     -- cases for top/left forest
     addBranchTopMid = addBranchChars (bC [N,S]) (bC [N,S,E]) (bC [N,S])
@@ -218,4 +221,4 @@ main = do
     p tree
   where
     p :: ExampleTree -> IO ()
-    p = putStrLn . treeShow
+    p tree = do { putStrLn . treeShow $ tree ; putStrLn "" }
