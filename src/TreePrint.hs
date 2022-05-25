@@ -124,58 +124,65 @@ bC ls
     -- true iff every list element in bs occurs in as
     contains as bs = all (`elem` as) bs
 
-treeShow :: (PrintableTree t a) => t -> String
+
+treeShow :: (PrintableTree tree a) => tree -> String
 treeShow = toStr . toGridStack . treeShow'
   where 
-    toStr :: CharGrid -> String
-    toStr = intercalate "\n"
     toGridStack :: TopMidBot -> CharGrid
     toGridStack (t,m,b) = t++m++b
+    toStr :: CharGrid -> String
+    toStr = intercalate "\n"
+
 
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
 
 data TMB = Top | Middle | Bottom
 
+
 treeShow' :: (PrintableTree tree a) => tree -> TopMidBot
-treeShow' tree =
-    ( padLefts  lChildren
-    , padMiddle mChild
-    , padRights rChildren
-    )
+treeShow' tree = 
+    let (midTop, midMid, midBot) = padMiddle mChild
+    in  ( padLefts lChildren ++ midTop
+        , midMid
+        , midBot ++ padRights rChildren
+        )
   where
+    contents = nodeStrContents tree
+    wSpace   = replicate (length contents) ' '
+
     (lTrees, mTree, rTrees) = getLeftMiddleRight tree
 
     lChildren = treeShow' <$> lTrees :: [TopMidBot]
-    mChild    = treeShow' <$> mTree  :: Maybe TopMidBot
+    mChild    = maybe ([],[""],[]) treeShow' mTree  :: TopMidBot
     rChildren = treeShow' <$> rTrees :: [TopMidBot]
 
-    contents = nodeStrContents $ tree
-    wSpace   = replicate (length contents) ' '
-
+    padLefts  :: [TopMidBot] -> CharGrid
     padLefts l  = 
-      map (wSpace++) . concatPadBranches Top addBranchTopMid addBranchTopTop $ l
-    padMiddle m = 
-        map (contents++) . concatPadBranches Middle allCase allCase . pure . fromMaybe ([],[""],[]) $ m
-      where 
-        allCase = addBranchChars midTopChar midMidChar midBotChar
-          where
-            midTopChar = bC $ if null lChildren 
-                              then [] :: [Adjacency]
-                              else [N,S]
-            midMidChar = bC . catMaybes $
-              [ if null   lChildren then Nothing else Just N
-              , if isNothing mChild    then Nothing else Just E
-              , if null   rChildren then Nothing else Just S
-              , if null lChildren && isNothing mChild && null rChildren 
-                then Nothing 
-                else Just W
-              ]
-            midBotChar = bC $ if null rChildren 
-                              then [] 
-                              else [N,S]
-    padRights r = 
-      map (wSpace++) . concatPadBranches Bottom addBranchBotMid addBranchBotBot $ r
+      concatPadBranches Top addBranchTopMid addBranchTopTop $ l
 
+    padRights :: [TopMidBot] -> CharGrid
+    padRights r = 
+      concatPadBranches Bottom addBranchBotMid addBranchBotBot $ r
+
+    {- case for middle tree more complicated than for top and bottom forests, 
+     - so i define it all right here -}
+    padMiddle :: TopMidBot -> TopMidBot
+    padMiddle m = addPrefixes midTopChar midMidChar midBotChar m
+      where
+        midTopChar = (wSpace++  ) . pure . bC $ if null lChildren 
+                                                then []
+                                                else [N,S]
+        midBotChar = (wSpace++  ) . pure . bC $ if null rChildren 
+                                                then [] 
+                                                else [N,S]
+        midMidChar = (contents++) . pure . bC . catMaybes $
+          [ if null   lTrees then Nothing else Just N
+          , if isNothing mTree then Nothing else Just E
+          , if null   rTrees then Nothing else Just S
+          , if null lTrees && isNothing mTree && null rTrees 
+            then Nothing 
+            else Just W
+          ]
 
     concatPadBranches :: TMB
                       -> (TopMidBot -> TopMidBot) 
@@ -186,25 +193,25 @@ treeShow' tree =
     concatPadBranches topOrBot midCase endCase sections@(h:tail) = 
         let padded = case topOrBot of
                      Top    -> [endCase h] ++ (midCase <$> tail)
-                     Middle -> midCase <$> sections -- singleton list
+                  -- Middle -> midCase <$> sections -- singleton list
                      Bottom -> let (init, (l:_)) = splitAt (length sections - 1) sections
                                in  (midCase <$> init) ++ [endCase l]
         in  concat $ (\ (t,m,b) -> t++m++b) <$> padded :: CharGrid
 
     -- cases for top/left forest
-    addBranchTopMid = addBranchChars (bC [N,S]) (bC [N,S,E]) (bC [N,S])
-    addBranchTopTop = addBranchChars (bC []) (bC [S,E]) (bC [N,S])
+    addBranchTopMid = addPrefixes (wSpace ++ [bC [N,S]]) (wSpace ++ [bC [N,S,E]]) (wSpace ++ [bC [N,S]])
+    addBranchTopTop = addPrefixes (wSpace ++ [bC []]) (wSpace ++ [bC [S,E]]) (wSpace ++ [bC [N,S]])
     addBranchTopBot = addBranchTopMid
     -- cases for bottom/right forest
     addBranchBotMid = addBranchTopMid
-    addBranchBotTop = addBranchBotMid
-    addBranchBotBot = addBranchChars (bC [N,S]) (bC [N,E]) (bC [])
+    addBranchBotTop = addBranchTopMid
+    addBranchBotBot = addPrefixes (wSpace ++ [bC [N,S]]) (wSpace ++ [bC [N,E]]) (wSpace ++ [bC []])
 
-    addBranchChars :: Char -> Char -> Char -> (TopMidBot -> TopMidBot)
-    addBranchChars topChar midChar botChar (tree,m,b) =
-      ( (topChar:) <$> tree
-      , (midChar:) <$> m
-      , (botChar:) <$> b
+    addPrefixes :: String -> String -> String -> (TopMidBot -> TopMidBot)
+    addPrefixes topPfix midPfix botPfix (t,m,b) =
+      ( (topPfix++) <$> t
+      , (midPfix++) <$> m
+      , (botPfix++) <$> b
       )
 
 

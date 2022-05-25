@@ -30,8 +30,9 @@ instance PrintableTree RETree String where
       | l == u           = "{" ++ show l ++ "}"
       | otherwise        = "{" ++ show l ++ "," ++ show u ++ "}"
     nodeContents (Repetition _ l Unlimited) 
-      | l == 0 = "*"
-      | l == 1 = "+"
+      | l == 0 = "(*)"
+      | l == 1 = "(+)"
+      | otherwise = "{" ++ show l ++ ",}"
     nodeContents (Concat _) = "(++)"
     nodeContents (Union  _) = "(|)"
 
@@ -89,7 +90,7 @@ unparse i (Union rs) = brackets i 1 . concat . intersperse "|" . map (unparse 1)
 
 -- '{' can optionally be treated literally in most dialects, 
 --     so long as it doesnt denote a range ,for example, "a{1,2}"
--- these 12 are the same amongst most popular modern RE dialects
+-- this set of 12 are the same amongst most popular modern RE dialects
 metaChars = "\\^$.|?*+()[{"
 type REParser = Parsec String () RETree
 

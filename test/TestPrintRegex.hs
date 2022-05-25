@@ -14,7 +14,13 @@ testPrintRegex = do
     p basic
     let basic = getStr "ab|cd"
     p basic
-    let basic = getTree "(ab){0,}"
+    let basic = getTree "a{0,}b{1,}c{5}d{5,}e"
+    p . show . Regex $ basic
+    p . show $ basic
+    let basic = getTree "(abcde)f"
+    p . show . Regex $ basic
+    p . show $ basic
+    let basic = getTree "(abcde){0,}"
     p . show . Regex $ basic
     p . show $ basic
   where
