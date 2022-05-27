@@ -4,6 +4,7 @@
 module TreePrint (
     PrintableTree
   , treeShow
+) where
 
 
 import Data.List  (intercalate, null)
