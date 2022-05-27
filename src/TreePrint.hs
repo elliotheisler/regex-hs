@@ -37,93 +37,113 @@ class (Show a) => PrintableTree t a | t -> a where
     nodeStrContents = show . nodeContents
 
 treeShow :: (PrintableTree tree a) => tree -> String
-treeShow = toStr . toGridStack . treeShow'
+treeShow = toStr . toGrid . treeShow'
   where 
-    toGridStack :: TopMidBot -> CharGrid
-    toGridStack (t,m,b) = t++m++b
+    toGrid :: TopMidBot -> CharGrid
+    toGrid (t,m,b) = t++m++b
     toStr :: CharGrid -> String
     toStr = intercalate "\n"
 
 type CharGrid = [String]
 
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
+newtype Triple a = Triple { unTriple :: (a,a,a) }
+instance Functor Triple where
+    fmap f (Triple (t,m,b)) = Triple (f t , f m , f b)
 
--- this function and its sub-functions are the bulk of this module
+data TopOrBottom = Top | Bottom
+
+-- this function and its sub-functions make up the bulk of this module
 treeShow' :: (PrintableTree tree a) => tree -> TopMidBot
 treeShow' tree = 
-    let (midTop, midMid, midBot) = padMiddle mChild
-    in  ( padLefts lChildren ++ midTop
-        , midMid
-        , midBot ++ padRights rChildren
-        )
+    (top, middle, bottom)
   where
-    contents = nodeStrContents tree
-    wSpace   = replicate (length contents) ' '
-
+    {- ~~~Step 1. convert left forest, middle child, and right forest into
+     - TopMidBot representations -}
     (lTrees, mTree, rTrees) = getLeftMiddleRight tree
 
     lChildren = treeShow' <$> lTrees :: [TopMidBot]
     mChild    = maybe ([],[""],[]) treeShow' mTree  :: TopMidBot
     rChildren = treeShow' <$> rTrees :: [TopMidBot]
 
-    padLefts  :: [TopMidBot] -> CharGrid
-    padLefts l  = 
-      concatPadBranches Top addBranchTopMid addBranchTopTop $ l
+    contents = nodeStrContents tree
+    wSpace   = replicate (length contents) ' '
 
-    padRights :: [TopMidBot] -> CharGrid
-    padRights r = 
-      concatPadBranches Bottom addBranchBotMid addBranchBotBot $ r
+    {- ~~~Step 2: pad top forest, middle tree, and bottom forest with box chars
+       and whitespace (or this node's contents in the case of the middle row.
+       core functions are addBoxChars and indent, respectively. -}
+    padMiddle :: TopMidBot -> TopMidBot
+    padMiddle = indentMiddle . addBoxChars midTopChar midMidChar midBotChar
+      where
+        midTopChar = bC $ if null lChildren 
+                                                then []
+                                                else [N,S]
+        midBotChar = bC $ if null rChildren 
+                                                then [] 
+                                                else [N,S]
+        midMidChar = bC . catMaybes $
+          [ if null   lTrees then Nothing else Just N
+          , if isNothing mTree then Nothing else Just E
+          , if null   rTrees then Nothing else Just S
+          , if null lTrees && isNothing mTree && null rTrees 
+            then Nothing 
+            else Just W
+          ]
+        indentMiddle = indent wSpace contents wSpace
 
-{- case for middle tree more complicated than for top and bottom forests, 
- - so i define it all right here -}
-padMiddle :: TopMidBot -> TopMidBot
-padMiddle m = addPrefixes midTopChar midMidChar midBotChar m
-  where
-    midTopChar = (wSpace++  ) . pure . bC $ if null lChildren 
-                                            then []
-                                            else [N,S]
-    midBotChar = (wSpace++  ) . pure . bC $ if null rChildren 
-                                            then [] 
-                                            else [N,S]
-    midMidChar = (contents++) . pure . bC . catMaybes $
-      [ if null   lTrees then Nothing else Just N
-      , if isNothing mTree then Nothing else Just E
-      , if null   rTrees then Nothing else Just S
-      , if null lTrees && isNothing mTree && null rTrees 
-        then Nothing 
-        else Just W
-      ]
+    padTops :: [TopMidBot] -> [TopMidBot]
+    padTops = map (indent wSpace wSpace wSpace) . bCharsTop
 
-data TopOrBottom = Top | Bottom
+    bCharsTop :: [TopMidBot] -> [TopMidBot]
+    bCharsTop [] = []
+    bCharsTop (tree:forest) = [bCharsTopTop tree] ++ (bCharsTopMid <$> forest)
 
-concatPadBranches :: TopOrBottom
-                  -> (TopMidBot -> TopMidBot) 
-                  -> (TopMidBot -> TopMidBot) 
-                  -> [TopMidBot] 
-                  -> CharGrid
-concatPadBranches _ _ _ [] = []
-concatPadBranches topOrBot midCase endCase sections@(h:tail) = 
-    let padded = case topOrBot of
-                 Top    -> [endCase h] ++ (midCase <$> tail)
-                 Bottom -> let (init, (l:_)) = splitAt (length sections - 1) sections
-                           in  (midCase <$> init) ++ [endCase l]
-    in  concat $ (\ (t,m,b) -> t++m++b) <$> padded :: CharGrid
+    padBottoms :: [TopMidBot] -> [TopMidBot]
+    padBottoms = map (indent wSpace wSpace wSpace) . bCharsBottom
 
--- cases for top/left forest
-addBranchTopMid = addPrefixes (wSpace ++ [bC [N,S]]) (wSpace ++ [bC [N,S,E]]) (wSpace ++ [bC [N,S]])
-addBranchTopTop = addPrefixes (wSpace ++ [bC []]) (wSpace ++ [bC [S,E]]) (wSpace ++ [bC [N,S]])
-addBranchTopBot = addBranchTopMid
--- cases for bottom/right forest
-addBranchBotMid = addBranchTopMid
-addBranchBotTop = addBranchTopMid
-addBranchBotBot = addPrefixes (wSpace ++ [bC [N,S]]) (wSpace ++ [bC [N,E]]) (wSpace ++ [bC []])
+    bCharsBottom :: [TopMidBot] -> [TopMidBot]
+    bCharsBottom [] = []
+    bCharsBottom forest = 
+      let (init, (l:_)) = splitAt (length forest - 1) forest
+      in  (bCharsBotMid <$> init) ++ [bCharsBotBot l]
+    
+    indent :: String -> String -> String -> (TopMidBot -> TopMidBot)
+    indent topSpace midSpace botSpace (t,m,b) = ( (topSpace++) <$> t
+                                                , (midSpace++) <$> m
+                                                , (botSpace++) <$> b
+                                                )
+    {- addBoxChars: 
+     - functions for prefixing a tree-representation with box-drawing characters
+     - representing the branches. Unused cases are commented out, but shown 
+     - anyway to illustrate the idea. -}
+ 
+    {- cases for top/left forest -}
+    bCharsTopMid = addBoxChars (bC [N,S]) (bC [N,S,E]) (bC [N,S])
+    bCharsTopTop = addBoxChars (bC []) (bC [S,E]) (bC [N,S])
+ -- bCharsTopBot = bCharsTopMid
+    {- cases for bottom/right forest -}
+    bCharsBotMid = bCharsTopMid
+ -- bCharsBotTop = bCharsTopMid
+    bCharsBotBot = addBoxChars (bC [N,S]) (bC [N,E]) (bC [])
 
-addPrefixes :: String -> String -> String -> (TopMidBot -> TopMidBot)
-addPrefixes topPfix midPfix botPfix (t,m,b) =
-  ( (topPfix++) <$> t
-  , (midPfix++) <$> m
-  , (botPfix++) <$> b
-  )
+    addBoxChars :: Char -> Char -> Char -> (TopMidBot -> TopMidBot)
+    addBoxChars topPfix midPfix botPfix (t,m,b) =
+      ( (topPfix:) <$> t
+      , (midPfix:) <$> m
+      , (botPfix:) <$> b
+      )
+
+    {- ~~~Step 3: construct TopMidBot representation.
+       note that the top and bottom of the *middle representation* 
+       is concatenated onto top and bottom lists, respectively -}
+
+    (midTop, midMid, midBot) = padMiddle mChild
+    top = (concatReprs . padTops $ lChildren) ++ midTop
+    middle = midMid
+    bottom = midBot ++ (concatReprs . padBottoms $ rChildren)
+
+    concatReprs :: [TopMidBot] -> CharGrid
+    concatReprs = concat . map (\ (t,m,b) -> t++m++b)
 
 data Adjacency = N | S | E | W deriving (Eq)
 
