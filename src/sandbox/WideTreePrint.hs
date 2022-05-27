@@ -1,4 +1,8 @@
 
+-- ExampleTree data, left branches, and right branches
+data ExampleTree    = ExampleTree  String [ExampleTree] [ExampleTree]
+type CharGrid = [String]
+
 -- TODO: could make tail-recursive
 zipWithAll :: (l -> r -> c) -> (l -> c) -> (r -> c) -> [l] -> [r] -> [c]
 zipWithAll f fl fr [] [] = []

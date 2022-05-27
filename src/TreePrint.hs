@@ -36,29 +36,6 @@ class (Show a) => PrintableTree t a | t -> a where
 
     nodeStrContents = show . nodeContents
 
--- ExampleTree data, left branches, and right branches
-data ExampleTree    = ExampleTree  String [ExampleTree] [ExampleTree]
-data ExampleTree2 a = ExampleTree2 a [ExampleTree2 a] [ExampleTree2 a]
-
-instance PrintableTree ExampleTree String where
-    nodeContents (ExampleTree s _ _) = s
-    getLeftMiddleRight (ExampleTree s lTrees rTrees) = (lTrees, mTree, rTrees)
-      where
-        (maybeMiddle,rTree) = splitAt 0 rTrees
-        mTree = listToMaybe maybeMiddle
--- NOTE: the '(Show a) =>' is necessary in both the class and the instance
-instance (Show a) => PrintableTree (ExampleTree2 a) a where
-    nodeContents (ExampleTree2 s _ _) = s
-    getLeftMiddleRight (ExampleTree2 s lTrees rTrees) = (lTrees, mTree, rTrees)
-      where
-        (maybeMiddle,rTree) = splitAt 0 rTrees
-        mTree = listToMaybe maybeMiddle
-
-type CharGrid = [String]
-
-data Adjacency = N | S | E | W deriving (Eq)
-
-
 treeShow :: (PrintableTree tree a) => tree -> String
 treeShow = toStr . toGridStack . treeShow'
   where 
@@ -67,12 +44,11 @@ treeShow = toStr . toGridStack . treeShow'
     toStr :: CharGrid -> String
     toStr = intercalate "\n"
 
+type CharGrid = [String]
 
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
 
-data TMB = Top | Middle | Bottom
-
-
+-- this function and its sub-functions are the bulk of this module
 treeShow' :: (PrintableTree tree a) => tree -> TopMidBot
 treeShow' tree = 
     let (midTop, midMid, midBot) = padMiddle mChild
@@ -118,7 +94,9 @@ padMiddle m = addPrefixes midTopChar midMidChar midBotChar m
         else Just W
       ]
 
-concatPadBranches :: TMB
+data TopOrBottom = Top | Bottom
+
+concatPadBranches :: TopOrBottom
                   -> (TopMidBot -> TopMidBot) 
                   -> (TopMidBot -> TopMidBot) 
                   -> [TopMidBot] 
@@ -127,7 +105,6 @@ concatPadBranches _ _ _ [] = []
 concatPadBranches topOrBot midCase endCase sections@(h:tail) = 
     let padded = case topOrBot of
                  Top    -> [endCase h] ++ (midCase <$> tail)
-              -- Middle -> midCase <$> sections -- singleton list
                  Bottom -> let (init, (l:_)) = splitAt (length sections - 1) sections
                            in  (midCase <$> init) ++ [endCase l]
     in  concat $ (\ (t,m,b) -> t++m++b) <$> padded :: CharGrid
@@ -147,6 +124,8 @@ addPrefixes topPfix midPfix botPfix (t,m,b) =
   , (midPfix++) <$> m
   , (botPfix++) <$> b
   )
+
+data Adjacency = N | S | E | W deriving (Eq)
 
 {- "boxChar": given a list of adjacency values, 
     get the corresponding unicode box-drawing character.
@@ -176,17 +155,3 @@ bC ls
     -- true iff every list element in bs occurs in as
     contains as bs = all (`elem` as) bs
 
-main :: IO ()
-main = do
-    let a = ExampleTree "$" [] []
-    let b = ExampleTree "b" [(ExampleTree "br" [] [])] []
-    let c = ExampleTree "cee" [(ExampleTree "cl" [] []), (ExampleTree "cll" [] [])] [(ExampleTree "cr" [] [])]
-    let tree = ExampleTree "R" 
-            [b, (ExampleTree "aaaaa" [] [])] 
-            [c, b]
-    p a
-    p c
-    p tree
-  where
-    p :: ExampleTree -> IO ()
-    p tree = do { putStrLn . treeShow $ tree ; putStrLn "" }
