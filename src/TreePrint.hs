@@ -1,7 +1,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
-module TreePrint where
+module TreePrint (
+    PrintableTree
+  , treeShow
 
 
 import Data.List  (intercalate, null)
@@ -47,11 +49,6 @@ treeShow = toStr . toGrid . treeShow'
 type CharGrid = [String]
 
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
-newtype Triple a = Triple { unTriple :: (a,a,a) }
-instance Functor Triple where
-    fmap f (Triple (t,m,b)) = Triple (f t , f m , f b)
-
-data TopOrBottom = Top | Bottom
 
 -- this function and its sub-functions make up the bulk of this module
 treeShow' :: (PrintableTree tree a) => tree -> TopMidBot
