@@ -2,7 +2,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 module TreePrint (
-    PrintableTree
+    PrintableTree (..)
   , treeShow
 ) where
 
@@ -14,7 +14,7 @@ import Data.Bool  (bool)
 
 class (Show a) => PrintableTree t a | t -> a where
   {- minimal definition: 
-     nodeContents & getForest | getLeftMiddleRight | (getLeftForest & getMiddleForest & getRightForest)
+     nodeContents & (getForest | getLeftMiddleRight | (getLeftForest & getMiddleForest & getRightForest))
   -}
     nodeContents :: t -> a
     nodeStrContents :: t -> String
@@ -40,7 +40,7 @@ class (Show a) => PrintableTree t a | t -> a where
     nodeStrContents = show . nodeContents
 
 treeShow :: (PrintableTree tree a) => tree -> String
-treeShow = toStr . toGrid . treeShow'
+treeShow = ("\n"++) . toStr . toGrid . treeShow' -- pad the top with a newline so it prints neatly within a Maybe, Either etc.
   where 
     toGrid :: TopMidBot -> CharGrid
     toGrid (t,m,b) = t++m++b

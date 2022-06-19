@@ -1,5 +1,7 @@
 module GHCIStuffs where
 import Regex
+import RETree
 import Text.Parsec
 import Data.Either (fromRight)
-prs = fromRight (Symbol '_') . parse parseRegex ""
+prs :: String -> String
+prs = fromRight "_" . fmap show . (parseRE :: String -> Either ParseError RETree)
