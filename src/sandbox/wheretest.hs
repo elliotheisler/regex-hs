@@ -1,3 +1,4 @@
+-- returns a / b
 fun a b = 
     that a
   where

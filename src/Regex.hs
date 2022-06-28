@@ -1,12 +1,20 @@
 module Regex
     ( Regex (..)
-    , ParseResult
+    , RegularExpr
+    , REParser
     ) where
 
-import Text.Parsec (ParseError)
+import Text.Parsec
+
+type RegularExpr = String
 
 class Regex repr where
-    parseRE :: String -> Either ParseError repr
+    parseRE :: RegularExpr -> Either ParseError repr
     runRE :: repr -> String -> Bool
 
-type ParseResult a = Either ParseError a
+type REParser a = Parsec String () a
+-- this just hides underlying type too much: type ParseResult a = Either ParseError a
+
+-- doesn't work because not all data constructors are public for ParseError
+-- {-# LANGUAGE StandaloneDeriving #-}
+-- deriving instance Read ParseError

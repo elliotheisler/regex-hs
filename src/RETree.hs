@@ -28,16 +28,21 @@ data RETree =
   | Repetition RETree LowerBound UpperBound
   | Concat [RETree]
   | Union [RETree]
+  deriving (Read)
 type LowerBound = Int
-data UpperBound = Unlimited | Upper Int
+data UpperBound = Unlimited | Upper Int deriving (Read)
 
 instance Regex RETree where
     parseRE regex = (trimFat <$>) . parse parseRegex "" $ regex
+    -- runRE Epsilon _ = True
+    -- runRE (Symbol c) h:tail = c == h
+    -- runRE (Repetition reTree lower Unlimited) str = 
+    -- runRE (Union forest) str = 
                         
 
 {-** PARSE-related functions & data **-}
 {-****************************-}
-type REParser = Parsec String () RETree
+type TreeParser = REParser RETree
 -- '{' can optionally be treated literally in most dialects, 
 --     so long as it doesnt denote a range ,for example, "a{1,2}"
 -- this set of 12 are the same amongst most popular modern RE dialects
@@ -49,21 +54,21 @@ metaChars = "\\^$.|?*+()[{"
 -- TODO: negated classes: [^a-z], etc
 -- TODO: possesive & lazy quantifiers?
 
-parseRegex :: REParser
+parseRegex :: TreeParser
 parseRegex = do
     re <- parseUnion
     eof
     return re
 {- parsePrimary, parseRepetition, parseConcat, and parseUnion: 
    a typical recursive-descent parser, in bottom-up order. -}
-parsePrimary :: REParser
+parsePrimary :: TreeParser
 parsePrimary = choice $ try <$> 
     [(between (char '(') (char ')') parseUnion)
     , Symbol <$> (char '\\' >> oneOf metaChars) 
     , Symbol <$> noneOf metaChars
     ]
 
-parseRepetition :: REParser
+parseRepetition :: TreeParser
 parseRepetition = do
     prim  <- parsePrimary
     range <- optionMaybe parseRange -- parsing fails here if we have nonsensical range like '{7,3}'
@@ -89,10 +94,10 @@ parseRange = do
                                      else fail $ printf "malformed range: {%d,%d}" lower u
     where parseInt = (read :: String -> LowerBound) <$> many1 digit
 
-parseConcat :: REParser
+parseConcat :: TreeParser
 parseConcat = Concat <$> many parseRepetition
                        
-parseUnion :: REParser
+parseUnion :: TreeParser
 parseUnion = Union <$> sepBy parseConcat (char '|')
 
 {- trimFat: remove redundant nodes, i.e. a union of one thing, repetition once or zero times, etc. -}
@@ -119,21 +124,27 @@ trimFat' (Union reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
 instance Eq RETree where
     Epsilon == Epsilon = True
     Symbol a == Symbol b = a == b
-    Repetition reNodeA la ua == Repetition reNodeB lb ub = 
-      reNodeA == reNodeB && la == lb && ua == ub
-    Concat nodesA == Concat nodesB =
-      all (\(a,b) -> a == b) $ zip nodesA nodesB
-    Union nodesA == Concat nodesB =
-      all (\(a,b) -> a == b) $ zip nodesA nodesB
+    Repetition reTreeA lA uA == Repetition reTreeB lB uB = 
+      reTreeA == reTreeB && lA == lB && uA == uB
+    Concat forestA == Concat forestB =
+      all (\(a,b) -> a == b) $ zip forestA forestB
+    Union forestA == Concat forestB =
+      all (\(a,b) -> a == b) $ zip forestA forestB
+    _ == _ = False -- need to explicitly include default case, otherwise get
+                   -- non-exhaustive patterns when running 'stack test'
 
 instance Eq UpperBound where
     Unlimited == Unlimited = True
     Upper a == Upper b = a == b
 
+{-** RUNREGEX-related functions **-}
+{-****************************-}
+-- TODO:
+
 {-** SHOW-related functions **-}
 {-****************************-}
 instance Show RETree where
-    show = treeShow
+    show = treeShow -- from PrintableTree instance
 
 instance PrintableTree RETree String where
     nodeStrContents = nodeContents
