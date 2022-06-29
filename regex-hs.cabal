@@ -39,6 +39,7 @@ library
     , base >=4.7 && <5
     , hspec
     , parsec
+    , text
   default-language: Haskell2010
 
 executable regex-hs-exe
@@ -54,14 +55,16 @@ executable regex-hs-exe
     , hspec
     , parsec
     , regex-hs
+    , text
   default-language: Haskell2010
 
 test-suite regex-hs-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      HspecRETree
+      HspecRETree.ParseRE
       QuickCheckRegex
+      Util
       Paths_regex_hs
   hs-source-dirs:
       test
@@ -72,4 +75,5 @@ test-suite regex-hs-test
     , hspec
     , parsec
     , regex-hs
+    , text
   default-language: Haskell2010

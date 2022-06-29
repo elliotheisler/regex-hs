@@ -24,6 +24,7 @@ dependencies:
 - parsec
 - QuickCheck
 - hspec
+- text
 
 library:
   source-dirs: src
