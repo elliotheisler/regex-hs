@@ -64,7 +64,7 @@ test-suite regex-hs-test
   other-modules:
       HspecRETree.ParseRE
       QuickCheckRegex
-      Util
+      TestUtil
       Paths_regex_hs
   hs-source-dirs:
       test

@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-
 with overloaded string literals enabled (with OverloadedStrings) a string literal has type (IsString a) => a.
-
 This means that the usual string syntax can be used, e.g., for ByteString, Text, and other variations of string like types. String literals behave very much like integer literals 
 -}
 
@@ -17,28 +16,46 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 
+import Text.Parsec
+
 import Regex
 import RETree
-import Util
+import TestUtil
 
 type Description = String
 type Input = String
-type Expected = Either ParseError RETree
+type Result = Maybe RETree
+
 
 spec_parseRE :: Spec
-spec_parseRE = do
-    tests <- map parseTest <$> runIO (readCSV " / " "test/HspecRETree/ParseRE.csv")
+spec_parseRE = runMyTests test_parseRE "test/HspecRETree/ParseRE.csv"
+  where
+    test_parseRE = rightToMaybe . parseRE
+    rightToMaybe (Right r) = Just r
+    rightToMaybe (Left _) = Nothing
+
+runMyTests :: (Input -> Result) -> FilePath -> Spec
+runMyTests fn csvFile = do
+    tests <- map parseTestCase <$> runIO (readCommentedCSV csvDelim csvFile)
     forM_ tests $ \(description, input, expected) ->
       it description $
-        parseRE input `shouldBe` expected
+        fn input `shouldBe` expected
 
-parseTest :: [Text] -> (Description, Input, Expected)
-parseTest [desc, input, expected] = -- let unpackedInput = Text.unpack input in
+parseTestCase :: [Text] -> (Description, Input, Result)
+parseTestCase [desc, input, expected] = -- let unpackedInput = Text.unpack input in
     ( Text.unpack $ substituteVars desc input expected
     , Text.unpack input
-    , Right (read . Text.unpack $ expected :: RETree)
+    , parseExpected expected
     )
-parseTest _ = error "Tried to parseTriple on list not of length=3"
+
+parseTestCase _ = 
+  error "MALFORMED TEST CASE: Tried to parseTriple on list not of length=3"
+
+
+parseExpected :: Text -> Result
+parseExpected "$FAIL" = Nothing
+parseExpected regex = Just (read . Text.unpack $ regex :: RETree)
+
 
 substituteVars :: Text -> Text -> Text -> Text 
 substituteVars desc input expected =
@@ -47,6 +64,7 @@ substituteVars desc input expected =
       then input <> " " <> (Text.unwords $ tail words)
       else desc
 
+-- old test driver
 -- spec_parseRE :: Spec
 -- spec_parseRE = do
 -- 

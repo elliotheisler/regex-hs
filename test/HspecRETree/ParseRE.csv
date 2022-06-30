@@ -1,4 +1,13 @@
+# Epsilon (empty regex, matches everything)
 empty regex evaluates to Epsilon /  / Epsilon
 repetition zero times evaluates to Epsilon / a{0,0} / Epsilon
 union of nothing evaluates to Epsilon / | / Epsilon
 
+# failures
+unescaped backslash fails to parse / \ / $FAIL
+lone quantifier ? fails to parse / ? / $FAIL
+lone quantifier + fails to parse / + / $FAIL
+lone quantifier * fails to parse / * / $FAIL
+lone opening parenthesis fails to parse / ( / $FAIL
+lone closing parenthesis fails to parse / ) / $FAIL
+lone square opening bracket fails to parse / [ / $FAIL
