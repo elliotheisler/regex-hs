@@ -1,1 +1,4 @@
-a{0,0} / Epsilon
+empty regex evaluates to Epsilon /  / Epsilon
+repetition zero times evaluates to Epsilon / a{0,0} / Epsilon
+union of nothing evaluates to Epsilon / | / Epsilon
+
