@@ -47,6 +47,7 @@ type TreeParser = REParser RETree
 --     so long as it doesnt denote a range ,for example, "a{1,2}"
 -- this set of 12 are the same amongst most popular modern RE dialects
 metaChars = "\\^$.|?*+()[{"
+mustBeEscaped = "/\\^$.|?*+()["
 -- TODO: parse quantifiers: *+?
 -- TODO: capture groups with id:  ()
 -- TODO: escaped characters & classes: \w, \t, \n
@@ -60,12 +61,12 @@ parseRegex = do
     eof
     return re
 {- parsePrimary, parseRepetition, parseConcat, and parseUnion: 
-   a typical recursive-descent parser, in bottom-up order. -}
+   a typical recursive-descent parser, presented in bottom-up order. -}
 parsePrimary :: TreeParser
 parsePrimary = choice $ try <$> 
     [(between (char '(') (char ')') parseUnion)
-    , Symbol <$> (char '\\' >> oneOf metaChars) 
-    , Symbol <$> noneOf metaChars
+    , Symbol <$> (char '\\' >> oneOf mustBeEscaped) 
+    , Symbol <$> noneOf mustBeEscaped
     ]
 
 parseRepetition :: TreeParser
@@ -80,8 +81,9 @@ parseRepetition = do
 -}
 parseRange :: Parsec String () (LowerBound, UpperBound)
 parseRange = do
-    char '{'
-    lower <- parseInt
+    try $ char '{'
+    --TODO: parsing will not get past here on "a{b": unexpected b, expecting digit
+    lower <- try parseInt 
     n <- try $ char ',' <|> char '}'
     if n == '}'
         then return (lower, Upper lower)
@@ -119,6 +121,7 @@ trimFat' (Concat reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
 trimFat' (Union [reTree]) = trimFat' reTree
 trimFat' (Union reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
     in  case trimmed of [] -> Nothing
+                        [reTree] -> Just reTree
                         trimmedForest -> Just (Union trimmedForest)
 
 instance Eq RETree where

@@ -2,6 +2,20 @@
 empty regex evaluates to Epsilon /  / Epsilon
 repetition zero times evaluates to Epsilon / a{0,0} / Epsilon
 union of nothing evaluates to Epsilon / | / Epsilon
+union of repetitions of nothing evals to Epsilon / a{0,0}|b{0,0} / Epsilon
+union of many things that eval to Epsilon, evaluates to Epsilon / a{0,0}|(asdf){0,0}| {0,0}||()| / Epsilon
+
+# trimFat test cases
+union of one thing evaluates to that thing / a| / Symbol 'a'
+concat of one thing evaluates to that thing / a / Symbol 'a'
+repetition one time evaluates to that thing / a{1,1} / Symbol 'a'
+union of repetitions of nothing evals to Epsilon / (nothing){0,0}|W{1,1}|(nothing){0,0} / Symbol 'W'
+
+# non-ranges
+'{' does not denote start of a range for $THIS / a{ / Concat [Symbol 'a', Symbol '{']
+'{' does not denote start of a range for $THIS / a{h / Concat [Symbol 'a', Symbol '{', Symbol 'h']
+'{' does not denote start of a range for $THIS / a{h} / Concat [Symbol 'a', Symbol '{', Symbol 'h', Symbol '}']
+'{' does not denote start of a range for $THIS / a{1,2b} / Concat [Symbol 'a', Symbol '{', Symbol '1', Symbol ',', Symbol '2', Symbol 'b', Symbol '}']
 
 # failures
 unescaped backslash fails to parse / \ / $FAIL
@@ -11,3 +25,4 @@ lone quantifier * fails to parse / * / $FAIL
 lone opening parenthesis fails to parse / ( / $FAIL
 lone closing parenthesis fails to parse / ) / $FAIL
 lone square opening bracket fails to parse / [ / $FAIL
+nonsensical range fails to parse / a{3,2}b / $FAIL
