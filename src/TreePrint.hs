@@ -1,6 +1,6 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE FlexibleInstances #-}
+-- {-# LANGUAGE MultiParamTypeClasses #-}
+-- {-# LANGUAGE FunctionalDependencies #-}
+-- {-# LANGUAGE FlexibleInstances #-}
 module TreePrint (
     PrintableTree (..)
   , treeShow
@@ -12,34 +12,32 @@ import Data.Maybe (catMaybes, isNothing, maybeToList, listToMaybe, fromMaybe)
 import Data.Bool  (bool)
 
 
-class (Show a) => PrintableTree t a | t -> a where
+class PrintableTree t where
   {- minimal definition: 
-     nodeContents & (getForest | getLeftMiddleRight | (getLeftForest & getMiddleForest & getRightForest))
+     ptContents & (ptForest | ptTopMidBot | (ptTopForest & ptMidForest & ptBotForest))
   -}
-    nodeContents :: t -> a
-    nodeStrContents :: t -> String
-    getLeftMiddleRight :: t -> ([t], Maybe t, [t])
-    getForest :: t -> [t]
-    getLeftForest :: t -> [t]
-    getMiddleForest :: t -> Maybe t
-    getRightForest :: t -> [t]
+    ptContents :: t -> String
+    ptTopMidBot :: t -> ([t], Maybe t, [t])
+    ptForest :: t -> [t]
+    ptTopForest :: t -> [t]
+    ptMidForest :: t -> Maybe t
+    ptBotForest :: t -> [t]
 
+    ptForest = (\ (l,m,r) -> l ++ (maybeToList m) ++ r) . ptTopMidBot
 
-    getForest = (\ (l,m,r) -> l ++ (maybeToList m) ++ r) . getLeftMiddleRight
-    getLeftMiddleRight t = 
-      let trees = getForest t
+    ptTopMidBot t = 
+      let trees = ptForest t
           (l,r)  = splitAt (length trees `div` 2) trees
           (m,r') = case r of []       -> (Nothing, r  )
                              (h:tail) -> (Just h, tail)
       in  (l,m,r')
-    getLeftMiddleRight t = (getLeftForest t, getMiddleForest t, getRightForest t)
-    getLeftForest   = (\ (l,_,_) -> l) . getLeftMiddleRight
-    getMiddleForest = (\ (_,m,_) -> m) . getLeftMiddleRight
-    getRightForest  = (\ (_,_,r) -> r) . getLeftMiddleRight
+    ptTopMidBot t = (ptTopForest t, ptMidForest t, ptBotForest t)
 
-    nodeStrContents = show . nodeContents
+    ptTopForest   = (\ (l,_,_) -> l) . ptTopMidBot
+    ptMidForest = (\ (_,m,_) -> m) . ptTopMidBot
+    ptBotForest  = (\ (_,_,r) -> r) . ptTopMidBot
 
-treeShow :: (PrintableTree tree a) => tree -> String
+treeShow :: (PrintableTree tree) => tree -> String
 treeShow = ("\n"++) . toStr . toGrid . treeShow' -- pad the top with a newline so it prints neatly within a Maybe, Either etc.
   where 
     toGrid :: TopMidBot -> CharGrid
@@ -52,19 +50,19 @@ type CharGrid = [String]
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
 
 -- this function and its sub-functions make up the bulk of this module
-treeShow' :: (PrintableTree tree a) => tree -> TopMidBot
+treeShow' :: (PrintableTree tree) => tree -> TopMidBot
 treeShow' tree = 
     (top, middle, bottom)
   where
     {- ~~~Step 1. convert left forest, middle child, and right forest into
      - TopMidBot representations -}
-    (lTrees, mTree, rTrees) = getLeftMiddleRight tree
+    (lTrees, mTree, rTrees) = ptTopMidBot tree
 
     lChildren = treeShow' <$> lTrees :: [TopMidBot]
     mChild    = maybe ([],[""],[]) treeShow' mTree  :: TopMidBot
     rChildren = treeShow' <$> rTrees :: [TopMidBot]
 
-    contents = nodeStrContents tree
+    contents = ptContents tree
     wSpace   = replicate (length contents) ' '
 
     {- ~~~Step 2: pad top forest, middle tree, and bottom forest with box chars

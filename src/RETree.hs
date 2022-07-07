@@ -138,7 +138,7 @@ instance Eq RETree where
     _ == _ = False -- need to explicitly include default case, otherwise get
                    -- non-exhaustive patterns when running 'stack test'
 
---TODO: isn't this just 'deriving (Eq)'
+--TODO: isn't this just 'deriving (Eq)?'
 instance Eq UpperBound where
     Unlimited == Unlimited = True
     Upper a == Upper b = a == b
@@ -152,27 +152,25 @@ instance Eq UpperBound where
 instance Show RETree where
     show = treeShow -- from PrintableTree instance
 
-instance PrintableTree RETree String where
-    nodeStrContents = nodeContents
-    
-    nodeContents Epsilon = unParse 0 Epsilon
-    nodeContents sym@(Symbol c) = unParse 0 sym
-    nodeContents (Repetition _ l (Upper u))
+instance PrintableTree RETree where
+    ptContents Epsilon = unParse 0 Epsilon
+    ptContents sym@(Symbol c) = unParse 0 sym
+    ptContents (Repetition _ l (Upper u))
       | l == 0 && u == 1 = "?"
       | l == u           = "{" ++ show l ++ "}"
       | otherwise        = "{" ++ show l ++ "," ++ show u ++ "}"
-    nodeContents (Repetition _ l Unlimited) 
+    ptContents (Repetition _ l Unlimited) 
       | l == 0 = "(*)"
       | l == 1 = "(+)"
       | otherwise = "{" ++ show l ++ ",}"
-    nodeContents (Concat _) = "(++)"
-    nodeContents (Union  _) = "(|)"
+    ptContents (Concat _) = "(++)"
+    ptContents (Union  _) = "(|)"
 
-    getForest Epsilon = []
-    getForest (Symbol _) = []
-    getForest (Repetition reTree _ _) = [reTree]
-    getForest (Concat reTrees) = reTrees
-    getForest (Union  reTrees) = reTrees
+    ptForest Epsilon = []
+    ptForest (Symbol _) = []
+    ptForest (Repetition reTree _ _) = [reTree]
+    ptForest (Concat reTrees) = reTrees
+    ptForest (Union  reTrees) = reTrees
 
 {- showTreeAsRegex :: exactly what you would expect :)
 -}
