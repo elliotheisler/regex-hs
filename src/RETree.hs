@@ -30,7 +30,7 @@ data RETree =
   | Union [RETree]
   deriving (Read)
 type LowerBound = Int
-data UpperBound = Unlimited | Upper Int deriving (Read)
+data UpperBound = Unlimited | Upper Int deriving (Read, Show)
 
 instance Regex RETree where
     parseRE regex = (trimFat <$>) . parse parseRegex "" $ regex
@@ -72,16 +72,20 @@ parsePrimary = choice $ try <$>
 parseRepetition :: TreeParser
 parseRepetition = do
     prim  <- parsePrimary
-    range <- optionMaybe parseRange -- parsing fails here if we have nonsensical range like '{7,3}'
-    case range of Just (lower, upper) -> return (Repetition prim lower upper)
-                  Nothing             -> return (Repetition prim 1 (Upper 1))
+    range <- optionMaybe . try $ parseRange 
+    case range of Just (lower, Upper upper) 
+                    | lower <= upper -> return (Repetition prim lower (Upper upper))
+                    | otherwise -> fail "parsed an invalid range (upper bound less than lower bound)"
+                  Just (lower, Unlimited) -> return (Repetition prim lower Unlimited)
+                  Nothing                 -> return (Repetition prim 1 (Upper 1))
 
 {- fails without consuming any input if range is malformed.
-    fails *with* consuming input if upper bound is less than the lower bound
+    fails *with* consuming input if a range was parsed, 
+    but upper bound was less than the lower bound
 -}
 parseRange :: Parsec String () (LowerBound, UpperBound)
 parseRange = do
-    try $ char '{'
+    char '{'
     --TODO: parsing will not get past here on "a{b": unexpected b, expecting digit
     lower <- try parseInt 
     n <- try $ char ',' <|> char '}'
@@ -91,9 +95,7 @@ parseRange = do
             upper <- optionMaybe . try $ parseInt
             char '}'
             case upper of Nothing -> return (lower, Unlimited)
-                          Just u  -> if lower <= u
-                                     then return $ (lower, (Upper u))
-                                     else fail $ printf "malformed range: {%d,%d}" lower u
+                          Just u  -> return (lower, Upper u  )
     where parseInt = (read :: String -> LowerBound) <$> many1 digit
 
 parseConcat :: TreeParser
@@ -136,6 +138,7 @@ instance Eq RETree where
     _ == _ = False -- need to explicitly include default case, otherwise get
                    -- non-exhaustive patterns when running 'stack test'
 
+--TODO: isn't this just 'deriving (Eq)'
 instance Eq UpperBound where
     Unlimited == Unlimited = True
     Upper a == Upper b = a == b
