@@ -30,7 +30,7 @@ data RETree =
   | Union [RETree]
   deriving (Read)
 type LowerBound = Int
-data UpperBound = Unlimited | Upper Int deriving (Read, Show)
+data UpperBound = Unlimited | Upper Int deriving (Read, Show, Eq)
 
 instance Regex RETree where
     parseRE regex = (trimFat <$>) . parse parseRegex "" $ regex
@@ -43,23 +43,10 @@ instance Regex RETree where
 {-** PARSE-related functions & data **-}
 {-****************************-}
 type TreeParser = REParser RETree
--- '{' can optionally be treated literally in most dialects, 
---     so long as it doesnt denote a range ,for example, "a{1,2}"
--- this set of 12 are the same amongst most popular modern RE dialects
-metaChars = "\\^$.|?*+()[{"
-mustBeEscaped = "/\\^$.|?*+()["
--- TODO: parse quantifiers: *+?
--- TODO: capture groups with id:  ()
--- TODO: escaped characters & classes: \w, \t, \n
--- TODO: character classes: [a-zA-Z], etc
--- TODO: negated classes: [^a-z], etc
--- TODO: possesive & lazy quantifiers?
 
 parseRegex :: TreeParser
-parseRegex = do
-    re <- parseUnion
-    eof
-    return re
+parseRegex = parseUnion <* eof
+
 {- parsePrimary, parseRepetition, parseConcat, and parseUnion: 
    a typical recursive-descent parser, presented in bottom-up order. -}
 parsePrimary :: TreeParser
@@ -138,11 +125,6 @@ instance Eq RETree where
     _ == _ = False -- need to explicitly include default case, otherwise get
                    -- non-exhaustive patterns when running 'stack test'
 
---TODO: isn't this just 'deriving (Eq)?'
-instance Eq UpperBound where
-    Unlimited == Unlimited = True
-    Upper a == Upper b = a == b
-
 {-** RUNREGEX-related functions **-}
 {-****************************-}
 -- TODO:
@@ -150,7 +132,7 @@ instance Eq UpperBound where
 {-** SHOW-related functions **-}
 {-****************************-}
 instance Show RETree where
-    show = treeShow -- from PrintableTree instance
+    show = ptShow -- from PrintableTree instance
 
 instance PrintableTree RETree where
     ptContents Epsilon = unParse 0 Epsilon

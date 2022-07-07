@@ -3,7 +3,7 @@
 -- {-# LANGUAGE FlexibleInstances #-}
 module TreePrint (
     PrintableTree (..)
-  , treeShow
+  , ptShow
 ) where
 
 
@@ -37,8 +37,8 @@ class PrintableTree t where
     ptMidForest = (\ (_,m,_) -> m) . ptTopMidBot
     ptBotForest  = (\ (_,_,r) -> r) . ptTopMidBot
 
-treeShow :: (PrintableTree tree) => tree -> String
-treeShow = ("\n"++) . toStr . toGrid . treeShow' -- pad the top with a newline so it prints neatly within a Maybe, Either etc.
+ptShow :: (PrintableTree tree) => tree -> String
+ptShow = ("\n"++) . toStr . toGrid . ptShow' -- pad the top with a newline so it prints neatly within a Maybe, Either etc.
   where 
     toGrid :: TopMidBot -> CharGrid
     toGrid (t,m,b) = t++m++b
@@ -50,17 +50,17 @@ type CharGrid = [String]
 type TopMidBot = (CharGrid, CharGrid, CharGrid)
 
 -- this function and its sub-functions make up the bulk of this module
-treeShow' :: (PrintableTree tree) => tree -> TopMidBot
-treeShow' tree = 
+ptShow' :: (PrintableTree tree) => tree -> TopMidBot
+ptShow' tree = 
     (top, middle, bottom)
   where
     {- ~~~Step 1. convert left forest, middle child, and right forest into
      - TopMidBot representations -}
     (lTrees, mTree, rTrees) = ptTopMidBot tree
 
-    lChildren = treeShow' <$> lTrees :: [TopMidBot]
-    mChild    = maybe ([],[""],[]) treeShow' mTree  :: TopMidBot
-    rChildren = treeShow' <$> rTrees :: [TopMidBot]
+    lChildren = ptShow' <$> lTrees :: [TopMidBot]
+    mChild    = maybe ([],[""],[]) ptShow' mTree  :: TopMidBot
+    rChildren = ptShow' <$> rTrees :: [TopMidBot]
 
     contents = ptContents tree
     wSpace   = replicate (length contents) ' '
