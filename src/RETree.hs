@@ -1,12 +1,17 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 module RETree
     ( RETree (..)
     , LowerBound
     , UpperBound (..)
     , metaChars
     , showTreeAsRegex
+    , reAllMatches
+--    , reSearchRep
+    , reSearch
+    , ParseProgress (..)
     ) where
 
 import Text.Parsec
@@ -21,7 +26,6 @@ import Regex
 
 -- precedence decreases downward
 -- TODO: add capture group constructor
--- IN PROGRESS: add Null/Nothing constructor?
 data RETree = 
     Epsilon -- the empty regular expression. matches everything
   | Symbol Char
@@ -40,8 +44,9 @@ instance Regex RETree where
     -- runRE (Union forest) str = 
                         
 
+
 {-** PARSE-related functions & data **-}
-{-****************************-}
+{-************************************************************************************-}
 type TreeParser = REParser RETree
 
 parseRegex :: TreeParser
@@ -113,6 +118,7 @@ trimFat' (Union reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
                         [reTree] -> Just reTree
                         trimmedForest -> Just (Union trimmedForest)
 
+-- TODO: is this just deriving (Eq)?
 instance Eq RETree where
     Epsilon == Epsilon = True
     Symbol a == Symbol b = a == b
@@ -125,12 +131,79 @@ instance Eq RETree where
     _ == _ = False -- need to explicitly include default case, otherwise get
                    -- non-exhaustive patterns when running 'stack test'
 
+
+
 {-** RUNREGEX-related functions **-}
-{-****************************-}
+{-************************************************************************************-}
 -- TODO:
+-- (RETree, Parsed, Remaining) => [(Parsed, Remaining)]
+
+data ParseProgress = ParseProgress String String deriving (Eq, Show)
+
+reAllMatches :: RETree -> String -> [String]
+reAllMatches reTree input = ( \(ParseProgress prsed _) -> reverse prsed ) <$> srchResults
+  where
+    srchResults = reSearch reTree (ParseProgress "" input)
+
+reSearch :: RETree -> ParseProgress -> [ParseProgress]
+
+reSearch Epsilon state = pure state
+
+reSearch (Union []) _ = mempty
+reSearch (Union _) (ParseProgress _ "") = mempty
+reSearch (Union (reNode:reForest)) state = 
+    reSearch reNode state <> reSearch (Union reForest) state
+    
+reSearch (Concat []) state = pure state -- simply return state wrapped in functor
+reSearch (Concat _) (ParseProgress _ "") = mempty
+reSearch (Concat (reNode:reForest)) state =
+    reSearch reNode state >>= reSearch (Concat reForest) 
+
+reSearch (Repetition reTree lower upper) state@(ParseProgress consumed remaining) =
+    reSearchRep [] subSearcher (lower, upper) 0 state
+  where
+    subSearcher = reSearch reTree
+  
+reSearch (Symbol _) (ParseProgress _ "") = mempty
+reSearch (Symbol s) (ParseProgress consumed (r:remaining))
+  | s == r = [ParseProgress (r:consumed) remaining]
+  | otherwise = mempty
+
+type Range = (LowerBound, UpperBound)
+
+reSearchRep 
+    :: [ParseProgress]                    
+    -> (ParseProgress -> [ParseProgress]) 
+    -> Range                              
+    -> Int                                
+    -> (ParseProgress -> [ParseProgress])
+
+reSearchRep acc _ (lower, Upper upper) i state@(ParseProgress _ "") = acc
+reSearchRep acc f range@(lower, Upper upper) i state
+    | nextStates == mempty = acc
+    | i >  upper = undefined
+    | i == upper = acc -- reached the max number of repetitions, now return the collection of states
+    | i >= lower - 1 = nextStates >>= reSearchRep (nextStates <> acc) f range (i+1) -- accumulate next states
+    | otherwise      = nextStates >>= reSearchRep acc f range (i+1) -- parse another repetition but don't accumulate
+  where
+    nextStates = f state
+
+{- | ~=~: "extensional equivalence"
+   a ~=~ b is true iff when applied to a higher order function (i.e. reSearch), a and b 
+   produce extensionally equivalent functions. this should be true if-and-only-if their 
+   minimized (trimFat) versions are structurally equal
+-}
+infix 4 ~=~
+(~=~) :: RETree -> RETree -> Bool
+treeA ~=~ treeB = trimmedA == trimmedB
+  where
+    trimmedA = trimFat treeA
+    trimmedB = trimFat treeB
+
+
 
 {-** SHOW-related functions **-}
-{-****************************-}
+{-************************************************************************************-}
 instance Show RETree where
     show = ptShow -- from PrintableTree instance
 
