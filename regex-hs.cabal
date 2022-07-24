@@ -38,6 +38,7 @@ library
       QuickCheck
     , base >=4.7 && <5
     , hspec
+    , mtl
     , parsec
     , text
   default-language: Haskell2010
@@ -53,6 +54,7 @@ executable regex-hs-exe
       QuickCheck
     , base >=4.7 && <5
     , hspec
+    , mtl
     , parsec
     , regex-hs
     , text
@@ -73,6 +75,7 @@ test-suite regex-hs-test
       QuickCheck
     , base >=4.7 && <5
     , hspec
+    , mtl
     , parsec
     , regex-hs
     , text

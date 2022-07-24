@@ -11,7 +11,7 @@ module RETree
     , reAllMatches
 --    , reSearchRep
     , reSearch
-    , ParseProgress (..)
+    , MatchProgress (..)
     ) where
 
 import Text.Parsec
@@ -96,16 +96,19 @@ parseConcat = Concat <$> many parseRepetition
 parseUnion :: TreeParser
 parseUnion = Union <$> sepBy parseConcat (char '|')
 
-{- trimFat: remove redundant nodes, i.e. a union of one thing, repetition once or zero times, etc. -}
+{- trimFat: 
+ - remove redundant nodes, i.e. a union of one thing, 
+ - repetition once or zero times, etc. 
+ -}
 trimFat  :: RETree -> RETree
 trimFat reTree = fromMaybe Epsilon $ trimFat' reTree
 trimFat' :: RETree -> Maybe RETree
 trimFat' (Symbol s) = Just (Symbol s)
 
-trimFat' (Repetition reNode 1 (Upper 1)) = trimFat' reNode
-trimFat' (Repetition reNode 0 (Upper 0)) = Nothing
-trimFat' (Repetition reNode lower upper) = 
-    (\x -> Repetition x lower upper) <$> (trimFat' reNode)
+trimFat' (Repetition reTree 1 (Upper 1)) = trimFat' reTree
+trimFat' (Repetition reTree 0 (Upper 0)) = Nothing
+trimFat' (Repetition reTree lower upper) = 
+    (\x -> Repetition x lower upper) <$> (trimFat' reTree)
 
 trimFat' (Concat [reTree]) = trimFat' reTree
 trimFat' (Concat reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
@@ -138,51 +141,51 @@ instance Eq RETree where
 -- TODO:
 -- (RETree, Parsed, Remaining) => [(Parsed, Remaining)]
 
-data ParseProgress = ParseProgress String String deriving (Eq, Show)
+data MatchProgress = MatchProgress String String deriving (Eq, Show)
 
 reAllMatches :: RETree -> String -> [String]
-reAllMatches reTree input = ( \(ParseProgress prsed _) -> reverse prsed ) <$> srchResults
+reAllMatches reTree input = ( \(MatchProgress prsed _) -> reverse prsed ) <$> srchResults
   where
-    srchResults = reSearch reTree (ParseProgress "" input)
+    srchResults = reSearch reTree (MatchProgress "" input)
 
-reSearch :: RETree -> ParseProgress -> [ParseProgress]
+reSearch :: RETree -> MatchProgress -> [MatchProgress]
 
 reSearch Epsilon state = pure state
 
 reSearch (Union []) _ = mempty
-reSearch (Union _) (ParseProgress _ "") = mempty
-reSearch (Union (reNode:reForest)) state = 
-    reSearch reNode state <> reSearch (Union reForest) state
+reSearch (Union _) (MatchProgress _ "") = mempty
+reSearch (Union (reTree:reForest)) state = 
+    reSearch reTree state <> reSearch (Union reForest) state
     
 reSearch (Concat []) state = pure state -- simply return state wrapped in functor
-reSearch (Concat _) (ParseProgress _ "") = mempty
-reSearch (Concat (reNode:reForest)) state =
-    reSearch reNode state >>= reSearch (Concat reForest) 
+reSearch (Concat _) (MatchProgress _ "") = mempty
+reSearch (Concat (reTree:reForest)) state =
+    reSearch reTree state >>= reSearch (Concat reForest) 
 
-reSearch (Repetition reTree lower upper) state@(ParseProgress consumed remaining) =
-    reSearchRep [] subSearcher (lower, upper) 0 state
+reSearch (Repetition reTree lower upper) state@(MatchProgress consumed remaining) =
+    reSearchRep [] searcher (lower, upper) 0 state
   where
-    subSearcher = reSearch reTree
+    searcher = reSearch reTree
   
-reSearch (Symbol _) (ParseProgress _ "") = mempty
-reSearch (Symbol s) (ParseProgress consumed (r:remaining))
-  | s == r = [ParseProgress (r:consumed) remaining]
+reSearch (Symbol _) (MatchProgress _ "") = mempty
+reSearch (Symbol s) (MatchProgress consumed (r:remaining))
+  | s == r = [MatchProgress (r:consumed) remaining]
   | otherwise = mempty
 
 type Range = (LowerBound, UpperBound)
 
 reSearchRep 
-    :: [ParseProgress]                    
-    -> (ParseProgress -> [ParseProgress]) 
-    -> Range                              
+    :: [MatchProgress]                    
+    -> (MatchProgress -> [MatchProgress]) 
+    -> Range
     -> Int                                
-    -> (ParseProgress -> [ParseProgress])
+    -> (MatchProgress -> [MatchProgress])
 
-reSearchRep acc _ (lower, Upper upper) i state@(ParseProgress _ "") = acc
+reSearchRep acc _ (lower, Upper upper) i state@(MatchProgress _ "") = acc
 reSearchRep acc f range@(lower, Upper upper) i state
     | nextStates == mempty = acc
-    | i >  upper = undefined
-    | i == upper = acc -- reached the max number of repetitions, now return the collection of states
+    | i >  upper     = undefined -- should never be called with i > upper
+    | i == upper     = acc -- reached the max number of repetitions, now return the collection of states
     | i >= lower - 1 = nextStates >>= reSearchRep (nextStates <> acc) f range (i+1) -- accumulate next states
     | otherwise      = nextStates >>= reSearchRep acc f range (i+1) -- parse another repetition but don't accumulate
   where
@@ -241,15 +244,15 @@ unParse _ Epsilon = "\x03f5"
 
 unParse _ (Symbol c) = [c]
 
-unParse i (Repetition reNode lower Unlimited)
-  | lower == 1 = brkts $ ps reNode ++ "+"
-  | lower == 0 = brkts $ ps reNode ++ "*"
-  | otherwise  = brkts $ ps reNode ++ "{" ++ show lower ++ ",}"
+unParse i (Repetition reTree lower Unlimited)
+  | lower == 1 = brkts $ ps reTree ++ "+"
+  | lower == 0 = brkts $ ps reTree ++ "*"
+  | otherwise  = brkts $ ps reTree ++ "{" ++ show lower ++ ",}"
   where brkts = brackets i 3
         ps    = unParse 3
-unParse i (Repetition reNode lower (Upper upper))
-  | lower == upper = brkts $ ps reNode ++ "{" ++ show lower ++ "}"
-  | otherwise = brkts $ ps reNode ++ "{" ++ show lower ++ "," ++ show upper ++ "}"
+unParse i (Repetition reTree lower (Upper upper))
+  | lower == upper = brkts $ ps reTree ++ "{" ++ show lower ++ "}"
+  | otherwise = brkts $ ps reTree ++ "{" ++ show lower ++ "," ++ show upper ++ "}"
   where brkts = brackets i 3
         ps    = unParse 3
 
