@@ -9,37 +9,49 @@ type Row = Int
 type Col = Row
 type Point = (Row, Col)
 data Board = Board [Point] [Point]
-newtype SortedRepr a = SortedRepr { unSorted :: [a] }
 
 instance Show Board where
-    show b = "Board:" <> show ( toSorted b )
+    show (Board queens _) = "Board: " <> showQueens queens
 
-toSorted :: Board -> SortedRepr Col
-toSorted (Board queens _) = 
-    SortedRepr $ (\(_,c) -> c) <$> sortOn (\(r,c) -> r) queens 
-
-instance Show (SortedRepr Col) where
-    show (unSorted -> []) = ""
-    show (unSorted -> c:tail) = 
+showQueens :: [Point] -> String
+showQueens [] = mempty
+showQueens ( (row,col):queens ) =
       "\n" <>
-      replicate c ' ' <>
-      "Q" <> 
-      replicate (7-c) ' ' <> 
-      show ( SortedRepr tail :: SortedRepr Col )
+      mconcat ( replicate col "_ " ) <>
+      "Q " <> 
+      mconcat ( replicate (7-col) "_ " ) <> 
+      showQueens queens
 
 backtrack :: Board -> Row -> Col -> [Board]
 backtrack _ i j
-  | i < 0 || i >  8 = undefined
-  | j < 0 || j >= 8 = undefined
-backtrack _ 8 _ = mempty
-backtrack b@(Board queens occupied) i 7
-  | (i, 7) `elem` occupied = backtrack b (i+1) 0
-  | otherwise = backtrack (plotQueen b i 7) (i+1) 0
+  | i < 0 || i > 8 = undefined
+  | j < 0 || j > 8 = undefined
+backtrack b 8 _ = return b
+backtrack b@(Board queens _) i 8 = case queens of
+    [] -> mempty
+    (row,col):queens | row == i  -> backtrack b (i+1) 0
+                     | otherwise -> mempty -- already tried all pieces in this row
 backtrack b@(Board queens occupied) i j
   | (i, j) `elem` occupied = nextInRow
-  | otherwise = backtrack (plotQueen b i j) i (j+1) <> nextInRow
+  | otherwise = backtrack (plotQueen b i j) (i+1) 0 <> nextInRow
   where
     nextInRow = backtrack b i (j+1)
+
+backtrackC :: Board -> Row -> Col -> Cont r Board
+backtrackC _ i j
+  | i < 0 || i > 8 = undefined
+  | j < 0 || j > 8 = undefined
+backtrackC b 8 _ = return b
+backtrackC b@(Board queens _) i 8 = case queens of
+    [] -> mempty 
+    (row,col):queens | row == i  -> backtrackC b (i+1) 0
+                     | otherwise -> mempty -- already tried all pieces in this row
+backtrackC b@(Board queens occupied) i j
+  | (i, j) `elem` occupied = nextInRow
+  | otherwise = callCC $ k $ backtrackC (plotQueen b i j) (i+1) 0 nextInRow
+  where
+    nextInRow = backtrackC b i (j+1)
+
 
 plotQueen :: Board -> Row -> Col -> Board
 plotQueen b@(Board queens occupied) row col = 
