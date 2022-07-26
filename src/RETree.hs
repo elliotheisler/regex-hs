@@ -4,12 +4,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 module RETree
     ( RETree (..)
+    , Quantifier (..)
     , LowerBound
     , UpperBound (..)
+    , LazyOrGreedy (..)
     , metaChars
     , showTreeAsRegex
     , reAllMatches
---    , reSearchRep
+--    , reSearchQfied
     , reSearch
     , MatchProgress (..)
     ) where
@@ -29,18 +31,27 @@ import Regex
 data RETree = 
     Epsilon -- the empty regular expression. matches everything
   | Symbol Char
-  | Repetition RETree LowerBound UpperBound
+  | Q Quantifier 
   | Concat [RETree]
   | Union [RETree]
   deriving (Read)
+
+-- Quantified regex's have their own special complexity so are defined as a seperate type
+data Quantifier = Quantifier RETree LowerBound UpperBound LazyOrGreedy deriving (Read)
 type LowerBound = Int
 data UpperBound = Unlimited | Upper Int deriving (Read, Show, Eq)
 
+instance Ord UpperBound where
+    _ <= Unlimited = True
+    Upper r <= Upper l = r <= l
+
+data LazyOrGreedy = Lazy | Greedy deriving (Read)
+
 instance Regex RETree where
-    parseRE regex = (trimFat <$>) . parse parseRegex "" $ regex
+    parseRE regex = (trimFat <$>) . parse parse2Tree "" $ regex
     -- runRE Epsilon _ = True
     -- runRE (Symbol c) h:tail = c == h
-    -- runRE (Repetition reTree lower Unlimited) str = 
+    -- runRE (Quantifier reTree lower Unlimited) str = 
     -- runRE (Union forest) str = 
                         
 
@@ -49,10 +60,10 @@ instance Regex RETree where
 {-************************************************************************************-}
 type TreeParser = REParser RETree
 
-parseRegex :: TreeParser
-parseRegex = parseUnion <* eof
+parse2Tree :: TreeParser
+parse2Tree = parseUnion <* eof
 
-{- parsePrimary, parseRepetition, parseConcat, and parseUnion: 
+{- parsePrimary, parseQuantifier, parseConcat, and parseUnion: 
    a typical recursive-descent parser, presented in bottom-up order. -}
 parsePrimary :: TreeParser
 parsePrimary = choice $ try <$> 
@@ -61,26 +72,34 @@ parsePrimary = choice $ try <$>
     , Symbol <$> noneOf mustBeEscaped
     ]
 
-parseRepetition :: TreeParser
-parseRepetition = do
+parseQuantifier :: TreeParser
+parseQuantifier = do
     prim  <- parsePrimary
-    range <- optionMaybe . try $ parseRange 
-    case range of Just (lower, Upper upper) 
-                    | lower <= upper -> return (Repetition prim lower (Upper upper))
+    range <- optionMaybe parseQuantifier'
+    case range of Just (lower, upper, lazyOrGreed) 
+                    | (Upper lower) <= upper -> return (Q (Quantifier prim lower upper lazyOrGreed))
                     | otherwise -> fail "parsed an invalid range (upper bound less than lower bound)"
-                  Just (lower, Unlimited) -> return (Repetition prim lower Unlimited)
-                  Nothing                 -> return (Repetition prim 1 (Upper 1))
+                  Nothing                 -> return (Q (Quantifier prim 1 (Upper 1) Greedy))
 
-{- fails without consuming any input if range is malformed.
-    fails *with* consuming input if a range was parsed, 
-    but upper bound was less than the lower bound
--}
+{- parseQuantifier': never fails *with* consuming input
+ -}
+parseQuantifier' :: Parsec String () (LowerBound, UpperBound, LazyOrGreedy)
+parseQuantifier' = do 
+    (lower, upper) <- choice [ (\_ -> (1, Unlimited)) <$> char '+'
+                             , (\_ -> (0, Unlimited)) <$> char '*'
+                             , (\_ -> (0, (Upper 1))) <$> char '?'
+                             , try parseRange -- dont consume input upon failure here
+                             ]
+    lazyOrGreedy <- option Greedy $ (\_ -> Lazy) <$> char '?'
+    return ( lower
+           , upper
+           , lazyOrGreedy
+           )
 parseRange :: Parsec String () (LowerBound, UpperBound)
 parseRange = do
     char '{'
-    --TODO: parsing will not get past here on "a{b": unexpected b, expecting digit
     lower <- try parseInt 
-    n <- try $ char ',' <|> char '}'
+    n <- char ',' <|> char '}'
     if n == '}'
         then return (lower, Upper lower)
         else do
@@ -91,24 +110,25 @@ parseRange = do
     where parseInt = (read :: String -> LowerBound) <$> many1 digit
 
 parseConcat :: TreeParser
-parseConcat = Concat <$> many parseRepetition
+parseConcat = Concat <$> many parseQuantifier
                        
 parseUnion :: TreeParser
 parseUnion = Union <$> sepBy parseConcat (char '|')
 
 {- trimFat: 
  - remove redundant nodes, i.e. a union of one thing, 
- - repetition once or zero times, etc. 
+ - quantified once or zero times, etc. 
  -}
 trimFat  :: RETree -> RETree
 trimFat reTree = fromMaybe Epsilon $ trimFat' reTree
+
 trimFat' :: RETree -> Maybe RETree
 trimFat' (Symbol s) = Just (Symbol s)
 
-trimFat' (Repetition reTree 1 (Upper 1)) = trimFat' reTree
-trimFat' (Repetition reTree 0 (Upper 0)) = Nothing
-trimFat' (Repetition reTree lower upper) = 
-    (\x -> Repetition x lower upper) <$> (trimFat' reTree)
+trimFat' (Q (Quantifier reTree 1 (Upper 1) _)) = trimFat' reTree
+trimFat' (Q (Quantifier reTree 0 (Upper 0) _)) = Nothing
+trimFat' (Q (Quantifier reTree lower upper lG)) = 
+    (\x -> Q (Quantifier x lower upper lG)) <$> (trimFat' reTree)
 
 trimFat' (Concat [reTree]) = trimFat' reTree
 trimFat' (Concat reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
@@ -125,7 +145,7 @@ trimFat' (Union reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
 instance Eq RETree where
     Epsilon == Epsilon = True
     Symbol a == Symbol b = a == b
-    Repetition reTreeA lA uA == Repetition reTreeB lB uB = 
+    Q (Quantifier reTreeA lA uA _) == Q (Quantifier reTreeB lB uB _) = 
       reTreeA == reTreeB && lA == lB && uA == uB
     Concat forestA == Concat forestB =
       all (\(a,b) -> a == b) $ zip forestA forestB
@@ -138,8 +158,6 @@ instance Eq RETree where
 
 {-** RUNREGEX-related functions **-}
 {-************************************************************************************-}
--- TODO:
--- (RETree, Parsed, Remaining) => [(Parsed, Remaining)]
 
 data MatchProgress = MatchProgress String String deriving (Eq, Show)
 
@@ -162,8 +180,8 @@ reSearch (Concat _) (MatchProgress _ "") = mempty
 reSearch (Concat (reTree:reForest)) state =
     reSearch reTree state >>= reSearch (Concat reForest) 
 
-reSearch (Repetition reTree lower upper) state@(MatchProgress consumed remaining) =
-    reSearchRep [] searcher (lower, upper) 0 state
+reSearch (Q qfier@(Quantifier reTree _ _ _)) state@(MatchProgress consumed remaining) = 
+    reSearchQfied [] searcher qfier 0 state
   where
     searcher = reSearch reTree
   
@@ -174,21 +192,26 @@ reSearch (Symbol s) (MatchProgress consumed (r:remaining))
 
 type Range = (LowerBound, UpperBound)
 
-reSearchRep 
+reSearchQfied 
     :: [MatchProgress]                    
     -> (MatchProgress -> [MatchProgress]) 
-    -> Range
+    -> Quantifier
     -> Int                                
     -> (MatchProgress -> [MatchProgress])
 
-reSearchRep acc _ (lower, Upper upper) i state@(MatchProgress _ "") = acc
-reSearchRep acc f range@(lower, Upper upper) i state
+-- no more parsing can be done, so return accumulated states.
+reSearchQfied acc _ _ _ state@(MatchProgress _ "") = acc
+
+reSearchQfied acc f qfier@(Quantifier _ lower upper lG) i state
     | nextStates == mempty = acc
-    | i >  upper     = undefined -- should never be called with i > upper
-    | i == upper     = acc -- reached the max number of repetitions, now return the collection of states
-    | i >= lower - 1 = nextStates >>= reSearchRep (nextStates <> acc) f range (i+1) -- accumulate next states
-    | otherwise      = nextStates >>= reSearchRep acc f range (i+1) -- parse another repetition but don't accumulate
+    | Upper i >  upper     = undefined -- should never be called with i > upper
+    | Upper i == upper     = acc -- reached the max number of repetitions, now return the collection of states
+    |       i >= lower - 1 = nextStates >>= reSearchQfied lazyOrGreedyUpdate f qfier (i+1) -- accumulate next states
+    | otherwise      = nextStates >>= reSearchQfied acc f qfier (i+1) -- parse another quantified but don't accumulate
   where
+    lazyOrGreedyUpdate = case lG of
+      Lazy -> acc <> nextStates
+      Greedy -> nextStates <> acc
     nextStates = f state
 
 {- | ~=~: "extensional equivalence"
@@ -213,11 +236,11 @@ instance Show RETree where
 instance PrintableTree RETree where
     ptContents Epsilon = unParse 0 Epsilon
     ptContents sym@(Symbol c) = unParse 0 sym
-    ptContents (Repetition _ l (Upper u))
+    ptContents (Q (Quantifier _ l (Upper u) _))
       | l == 0 && u == 1 = "?"
       | l == u           = "{" ++ show l ++ "}"
       | otherwise        = "{" ++ show l ++ "," ++ show u ++ "}"
-    ptContents (Repetition _ l Unlimited) 
+    ptContents (Q (Quantifier _ l Unlimited _)) 
       | l == 0 = "(*)"
       | l == 1 = "(+)"
       | otherwise = "{" ++ show l ++ ",}"
@@ -226,7 +249,7 @@ instance PrintableTree RETree where
 
     ptForest Epsilon = []
     ptForest (Symbol _) = []
-    ptForest (Repetition reTree _ _) = [reTree]
+    ptForest (Q (Quantifier reTree _ _ _)) = [reTree]
     ptForest (Concat reTrees) = reTrees
     ptForest (Union  reTrees) = reTrees
 
@@ -244,13 +267,13 @@ unParse _ Epsilon = "\x03f5"
 
 unParse _ (Symbol c) = [c]
 
-unParse i (Repetition reTree lower Unlimited)
+unParse i (Q (Quantifier reTree lower Unlimited _))
   | lower == 1 = brkts $ ps reTree ++ "+"
   | lower == 0 = brkts $ ps reTree ++ "*"
   | otherwise  = brkts $ ps reTree ++ "{" ++ show lower ++ ",}"
   where brkts = brackets i 3
         ps    = unParse 3
-unParse i (Repetition reTree lower (Upper upper))
+unParse i (Q (Quantifier reTree lower (Upper upper) _))
   | lower == upper = brkts $ ps reTree ++ "{" ++ show lower ++ "}"
   | otherwise = brkts $ ps reTree ++ "{" ++ show lower ++ "," ++ show upper ++ "}"
   where brkts = brackets i 3

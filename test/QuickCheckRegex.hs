@@ -23,15 +23,15 @@ prop_MetaChar1 c = (parseRE ['\\', c] == Right (Symbol c)) ==
                    (c `elem` metaChars)
 
 {- upper bound must be greater than lower bound -}
-prop_RepetitionGreaterThan :: Char -> QC.NonNegative Int -> QC.NonNegative Int -> Property
-prop_RepetitionGreaterThan c (QC.NonNegative l) (QC.NonNegative u) = 
+prop_QuantifierGreaterThan :: Char -> QC.NonNegative Int -> QC.NonNegative Int -> Property
+prop_QuantifierGreaterThan c (QC.NonNegative l) (QC.NonNegative u) = 
   l <= u && not (c `elem` metaChars) && 1 < u ==> 
     ( ((parseRE :: String -> Either ParseError RETree) $ [c] ++ "{" ++ (show l) ++ "," ++ (show u) ++ "}") 
       == 
-      Right (Repetition (Symbol c) l (Upper u))
+      Right (Q (Quantifier (Symbol c) l (Upper u) Greedy))
     )
-prop_RepetitionLessThan :: Char -> QC.NonNegative Int -> QC.NonNegative Int -> Property
-prop_RepetitionLessThan c (QC.NonNegative l) (QC.NonNegative u) = 
+prop_QuantifierLessThan :: Char -> QC.NonNegative Int -> QC.NonNegative Int -> Property
+prop_QuantifierLessThan c (QC.NonNegative l) (QC.NonNegative u) = 
     l > u && not (c `elem` metaChars) ==> 
       (isLeft . (parseRE :: String -> Either ParseError RETree) $ [c] ++ "{" ++ (show l) ++ "," ++ (show u) ++ "}")
 
