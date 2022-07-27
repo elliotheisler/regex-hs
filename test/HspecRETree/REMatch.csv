@@ -1,8 +1,13 @@
+# basic tests
 '+' quantifier greedy / ("a+", ["", "ba", "a", "aa", "aaa", "ab"]) / [False, False, True, True, True, True]
 '+' quantifier lazy / ("a+?", ["", "ba", "a", "aa", "aaa", "ab"]) / [False, False, True, True, True, True]
 '*' quantifier greedy / ("a*", ["", "ba", "a", "aa", "aaa", "ab"]) / [True, True, True, True, True, True]
 '*' quantifier lazy / ("a*?", ["", "ba", "a", "aa", "aaa", "ab"]) / [True, True, True, True, True, True]
 '?' quantifier greedy / ("a?", ["", "ba", "a", "aa", "aaa", "ab"]) / [True, True, True, True, True, True]
 '?' quantifier lazy / ("a??", ["", "ba", "a", "aa", "aaa", "ab"]) / [True, True, True, True, True, True]
-optional 'a' then optional 'b' / ("a?b?", ["", "a", "b", "ab", "baaabb__", "xxx"]) / [True, True, True, True, True, True]
-union of optionals / ("a?|b?", ["", "a", "b", "ab", "baaabb__", "xxx"]) / [True, True, True, True, True, True]
+
+# more complex
+optional 'a' then optional 'b' / ("a?b?", ["", "a", "b", "ab", "ba", "xxx"]) / [True, True, True, True, True, True]
+plus 'a' then plus 'b' / ("a+b+", ["", "a", "b", "ab", "ba", "aaabbbbxx"]) / [False, False, False, True, False, True]
+union of optionals / ("a?|b?", ["", "a", "b", "ab", "ba", "xxx"]) / [True, True, True, True, True, True]
+union of plus's / ("a+|b+", ["", "a", "b", "ab", "ba", "xxx", "_a"]) / [False, True, True, True, True, False, False]
