@@ -11,16 +11,17 @@ type Point = (Row, Col)
 data Board = Board [Point] [Point]
 
 instance Show Board where
-    show (Board queens _) = "Board: " <> showQueens queens
-
-showQueens :: [Point] -> String
-showQueens [] = mempty
-showQueens ( (row,col):queens ) =
+    show (Board queens _) = "Board: " <> showSolution queens
+    
+{- showSolution: only correctly prints for a complete solution where each row has exactly 1 queen -}
+showSolution :: [Point] -> String
+showSolution [] = mempty
+showSolution ( (row,col):queens ) =
       "\n" <>
       mconcat ( replicate col "_ " ) <>
       "Q " <> 
       mconcat ( replicate (7-col) "_ " ) <> 
-      showQueens queens
+      showSolution queens
 
 backtrack :: Board -> Row -> Col -> [Board]
 backtrack _ i j
