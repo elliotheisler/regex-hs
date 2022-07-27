@@ -9,10 +9,9 @@ module RETree
     , UpperBound (..)
     , LazyOrGreedy (..)
     , metaChars
-    , showTreeAsRegex
-    , reAllMatches
+    , unparseTree
 --    , reSearchQfied
-    , reSearch
+    , reMatches_
     , MatchProgress (..)
     ) where
 
@@ -30,14 +29,15 @@ import Regex
 -- TODO: add capture group constructor
 data RETree = 
     Epsilon -- the empty regular expression. matches everything
+  | CaptureGroup RETree
   | Symbol Char
   | Q Quantifier 
   | Concat [RETree]
   | Union [RETree]
-  deriving (Read)
+  deriving (Eq, Read)
 
 -- Quantified regex's have their own special complexity so are defined as a seperate type
-data Quantifier = Quantifier RETree LowerBound UpperBound LazyOrGreedy deriving (Read)
+data Quantifier = Quantifier RETree LowerBound UpperBound LazyOrGreedy deriving (Eq, Read)
 type LowerBound = Int
 data UpperBound = Unlimited | Upper Int deriving (Read, Show, Eq)
 
@@ -45,29 +45,35 @@ instance Ord UpperBound where
     _ <= Unlimited = True
     Upper r <= Upper l = r <= l
 
-data LazyOrGreedy = Lazy | Greedy deriving (Read)
+data LazyOrGreedy = Lazy | Greedy deriving (Eq, Read)
 
-instance Regex RETree where
-    parseRE regex = (trimFat <$>) . parse parse2Tree "" $ regex
-    -- runRE Epsilon _ = True
-    -- runRE (Symbol c) h:tail = c == h
-    -- runRE (Quantifier reTree lower Unlimited) str = 
-    -- runRE (Union forest) str = 
+instance RegexRepr RETree where
+    reCompile regex = (trimFat <$>) . parse (parseUnion <* eof) "" $ regex
+    reMatches reTree input = reMatches_ reTree (MatchProgress "" input [])
+
+    -- reMatchSearch Epsilon input = Just (MatchProgress [] input [])
+    -- reMatchSearch r "" = Nothing
+    -- reMatchSearch r input@(c:tail) = case reMatch r input of
+    --     Just m -> Just m
+    --     Nothing -> reMatch r tail
                         
 
 
 {-** PARSE-related functions & data **-}
 {-************************************************************************************-}
 type TreeParser = REParser RETree
-
-parse2Tree :: TreeParser
-parse2Tree = parseUnion <* eof
-
 {- parsePrimary, parseQuantifier, parseConcat, and parseUnion: 
    a typical recursive-descent parser, presented in bottom-up order. -}
+                       
+parseUnion :: TreeParser
+parseUnion = Union <$> sepBy parseConcat (char '|')
+
+parseConcat :: TreeParser
+parseConcat = Concat <$> many parseQuantifier
+
 parsePrimary :: TreeParser
 parsePrimary = choice $ try <$> 
-    [(between (char '(') (char ')') parseUnion)
+    [ CaptureGroup <$> (between (char '(') (char ')') parseUnion)
     , Symbol <$> (char '\\' >> oneOf mustBeEscaped) 
     , Symbol <$> noneOf mustBeEscaped
     ]
@@ -95,6 +101,7 @@ parseQuantifier' = do
            , upper
            , lazyOrGreedy
            )
+
 parseRange :: Parsec String () (LowerBound, UpperBound)
 parseRange = do
     char '{'
@@ -109,12 +116,6 @@ parseRange = do
                           Just u  -> return (lower, Upper u  )
     where parseInt = (read :: String -> LowerBound) <$> many1 digit
 
-parseConcat :: TreeParser
-parseConcat = Concat <$> many parseQuantifier
-                       
-parseUnion :: TreeParser
-parseUnion = Union <$> sepBy parseConcat (char '|')
-
 {- trimFat: 
  - remove redundant nodes, i.e. a union of one thing, 
  - quantified once or zero times, etc. 
@@ -124,6 +125,8 @@ trimFat reTree = fromMaybe Epsilon $ trimFat' reTree
 
 trimFat' :: RETree -> Maybe RETree
 trimFat' (Symbol s) = Just (Symbol s)
+
+trimFat' (CaptureGroup reTree) = CaptureGroup <$> trimFat' reTree
 
 trimFat' (Q (Quantifier reTree 1 (Upper 1) _)) = trimFat' reTree
 trimFat' (Q (Quantifier reTree 0 (Upper 0) _)) = Nothing
@@ -142,56 +145,53 @@ trimFat' (Union reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
                         trimmedForest -> Just (Union trimmedForest)
 
 -- TODO: is this just deriving (Eq)?
-instance Eq RETree where
-    Epsilon == Epsilon = True
-    Symbol a == Symbol b = a == b
-    Q (Quantifier reTreeA lA uA _) == Q (Quantifier reTreeB lB uB _) = 
-      reTreeA == reTreeB && lA == lB && uA == uB
-    Concat forestA == Concat forestB =
-      all (\(a,b) -> a == b) $ zip forestA forestB
-    Union forestA == Concat forestB =
-      all (\(a,b) -> a == b) $ zip forestA forestB
-    _ == _ = False -- need to explicitly include default case, otherwise get
-                   -- non-exhaustive patterns when running 'stack test'
+-- instance Eq RETree where
+--     Epsilon == Epsilon = True
+--     Symbol a == Symbol b = a == b
+--     Q (Quantifier reTreeA lA uA _) == Q (Quantifier reTreeB lB uB _) = 
+--       reTreeA == reTreeB && lA == lB && uA == uB
+--     Concat forestA == Concat forestB =
+--       all (\(a,b) -> a == b) $ zip forestA forestB
+--     Union forestA == Concat forestB =
+--       all (\(a,b) -> a == b) $ zip forestA forestB
+--     _ == _ = False -- need to explicitly include default case, otherwise get
+--                    -- non-exhaustive patterns when running 'stack test'
 
 
 
 {-** RUNREGEX-related functions **-}
 {-************************************************************************************-}
 
-data MatchProgress = MatchProgress String String deriving (Eq, Show)
+reMatches_ :: RETree -> MatchProgress -> [MatchProgress]
 
-reAllMatches :: RETree -> String -> [String]
-reAllMatches reTree input = ( \(MatchProgress prsed _) -> reverse prsed ) <$> srchResults
-  where
-    srchResults = reSearch reTree (MatchProgress "" input)
+reMatches_ Epsilon state = return state
 
-reSearch :: RETree -> MatchProgress -> [MatchProgress]
-
-reSearch Epsilon state = pure state
-
-reSearch (Union []) _ = mempty
-reSearch (Union _) (MatchProgress _ "") = mempty
-reSearch (Union (reTree:reForest)) state = 
-    reSearch reTree state <> reSearch (Union reForest) state
+reMatches_ (Union []) _ = []
+reMatches_ (Union _) (MatchProgress _ "" _) = []
+reMatches_ (Union (reTree:reForest)) state = 
+    reMatches_ reTree state <> reMatches_ (Union reForest) state
     
-reSearch (Concat []) state = pure state -- simply return state wrapped in functor
-reSearch (Concat _) (MatchProgress _ "") = mempty
-reSearch (Concat (reTree:reForest)) state =
-    reSearch reTree state >>= reSearch (Concat reForest) 
+reMatches_ (Concat []) state = return state
+reMatches_ (Concat _) (MatchProgress _ "" _) = []
+reMatches_ (Concat (reTree:reForest)) state =
+    reMatches_ reTree state >>= reMatches_ (Concat reForest) 
 
-reSearch (Q qfier@(Quantifier reTree _ _ _)) state@(MatchProgress consumed remaining) = 
+reMatches_ (Q qfier@(Quantifier reTree _ _ _)) state = 
     reSearchQfied [] searcher qfier 0 state
   where
-    searcher = reSearch reTree
+    searcher = reMatches_ reTree
   
-reSearch (Symbol _) (MatchProgress _ "") = mempty
-reSearch (Symbol s) (MatchProgress consumed (r:remaining))
-  | s == r = [MatchProgress (r:consumed) remaining]
-  | otherwise = mempty
+reMatches_ (Symbol _) (MatchProgress _ "" _) = []
+reMatches_ (Symbol s) (MatchProgress consumed (r:remaining) groups)
+  | s == r = [MatchProgress (r:consumed) remaining groups]
+  | otherwise = []
 
-type Range = (LowerBound, UpperBound)
+reSearch (CaptureGroup reTree) state@(MatchProgress consumed "" groups) = return state
+reSearch (CaptureGroup reTree) state@(MatchProgress consumed remaining groups) = 
+    ( \(MatchProgress c r g) -> MatchProgress c r [MatchProgress c r g] ) <$> 
+      reSearch reTree state
 
+-- TODO: make Quantifier contain quantifier information only. not RegexRepr child.
 reSearchQfied 
     :: [MatchProgress]                    
     -> (MatchProgress -> [MatchProgress]) 
@@ -200,10 +200,10 @@ reSearchQfied
     -> (MatchProgress -> [MatchProgress])
 
 -- no more parsing can be done, so return accumulated states.
-reSearchQfied acc _ _ _ state@(MatchProgress _ "") = acc
+reSearchQfied acc _ _ _ (MatchProgress _ "" _) = acc
 
 reSearchQfied acc f qfier@(Quantifier _ lower upper lG) i state
-    | nextStates == mempty = acc
+    | nextStates == [] = acc
     | Upper i >  upper     = undefined -- should never be called with i > upper
     | Upper i == upper     = acc -- reached the max number of repetitions, now return the collection of states
     |       i >= lower - 1 = nextStates >>= reSearchQfied lazyOrGreedyUpdate f qfier (i+1) -- accumulate next states
@@ -215,7 +215,7 @@ reSearchQfied acc f qfier@(Quantifier _ lower upper lG) i state
     nextStates = f state
 
 {- | ~=~: "extensional equivalence"
-   a ~=~ b is true iff when applied to a higher order function (i.e. reSearch), a and b 
+   a ~=~ b is true iff when applied to a higher order function (i.e. reMatches_), a and b 
    produce extensionally equivalent functions. this should be true if-and-only-if their 
    minimized (trimFat) versions are structurally equal
 -}
@@ -235,7 +235,8 @@ instance Show RETree where
 
 instance PrintableTree RETree where
     ptContents Epsilon = unParse 0 Epsilon
-    ptContents sym@(Symbol c) = unParse 0 sym
+    ptContents (CaptureGroup _) = "()"
+    ptContents sym@(Symbol _) = unParse 0 sym
     ptContents (Q (Quantifier _ l (Upper u) _))
       | l == 0 && u == 1 = "?"
       | l == u           = "{" ++ show l ++ "}"
@@ -248,15 +249,16 @@ instance PrintableTree RETree where
     ptContents (Union  _) = "(|)"
 
     ptForest Epsilon = []
+    ptForest (CaptureGroup reTree) = [reTree]
     ptForest (Symbol _) = []
     ptForest (Q (Quantifier reTree _ _ _)) = [reTree]
     ptForest (Concat reTrees) = reTrees
     ptForest (Union  reTrees) = reTrees
 
-{- showTreeAsRegex :: exactly what you would expect :)
+{- unparseTree :: exactly what you would expect :)
 -}
-showTreeAsRegex :: RETree -> String
-showTreeAsRegex reTree = "/" ++ unParse 0 reTree ++ "/"
+unparseTree :: RETree -> String
+unparseTree reTree = "/" ++ unParse 0 reTree ++ "/"
 {- unParse: convert this regex tree to is string-regex form, making sure
    to place it in brackets to show precedence if its parent has higher-or-equal 
    precedence 

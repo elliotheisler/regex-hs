@@ -64,7 +64,7 @@ test-suite regex-hs-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      HspecRETree.ParseRE
+      HspecRETree.RECompile
       QuickCheckRegex
       TestUtil
       Paths_regex_hs

@@ -4,7 +4,7 @@ with overloaded string literals enabled (with OverloadedStrings) a string litera
 This means that the usual string syntax can be used, e.g., for ByteString, Text, and other variations of string like types. String literals behave very much like integer literals 
 -}
 
-module HspecRETree.ParseRE where
+module HspecRETree.RECompile where
 
 
 import Test.Hspec
@@ -28,9 +28,9 @@ type Result = Maybe RETree
 
 
 spec_parseRE :: Spec
-spec_parseRE = runMyTests test_parseRE "test/HspecRETree/ParseRE.csv"
+spec_parseRE = runMyTests test_parseRE "test/HspecRETree/RECompile.csv"
   where
-    test_parseRE = rightToMaybe . parseRE
+    test_parseRE = rightToMaybe . reCompile
     rightToMaybe (Right r) = Just r
     rightToMaybe (Left _) = Nothing
 
@@ -69,8 +69,8 @@ substituteVars desc input expected =
 -- spec_parseRE = do
 -- 
 --     it "evaluates Repetition of zero times to empty regex" $
---       (parseRE "a{0,0}" :: Expected) `shouldBe` (Right $ read "Epsilon" :: Expected)
+--       (reCompile "a{0,0}" :: Expected) `shouldBe` (Right $ read "Epsilon" :: Expected)
 -- 
 --     it "evaluates '|' (union of nothing) to empty regex" $
---       (parseRE "|" :: Expected) `shouldBe` (Right $ read "Epsilon" :: Expected)
+--       (reCompile "|" :: Expected) `shouldBe` (Right $ read "Epsilon" :: Expected)
 

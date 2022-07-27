@@ -2,7 +2,7 @@ import Test.Hspec
 import Test.QuickCheck (quickCheckAll)
 
 import QuickCheckRegex
-import HspecRETree.ParseRE
+import HspecRETree.RECompile
 
 main :: IO ()
 main = do
