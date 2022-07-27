@@ -28,8 +28,7 @@ class RegexRepr r where
 
     -- try to match from first char, second, etc. and stop at first match
     reMatchSearch :: r -> String -> Maybe MatchProgress 
-    -- reMatchSearch epsilon input = Just (MatchProgress [] input [])
-    reMatchSearch r "" = Nothing
+    reMatchSearch r "" = reMatch r ""
     reMatchSearch r input@(c:tail) = case reMatch r input of
         Just m -> Just m
         Nothing -> reMatch r tail

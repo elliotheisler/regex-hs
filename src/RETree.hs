@@ -50,13 +50,6 @@ instance RegexRepr RETree where
     reCompile regex = (trimFat <$>) . parse (parseUnion <* eof) "" $ regex
     reMatches reTree input = reMatches_ reTree (MatchProgress "" input [])
 
-    -- reMatchSearch Epsilon input = Just (MatchProgress [] input [])
-    -- reMatchSearch r "" = Nothing
-    -- reMatchSearch r input@(c:tail) = case reMatch r input of
-    --     Just m -> Just m
-    --     Nothing -> reMatch r tail
-                        
-
 
 {-** PARSE-related functions & data **-}
 {-************************************************************************************-}
