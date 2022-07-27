@@ -1,41 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HspecRETree.RECompile
+module HspecRETree.REMatch -- TODO
     ( doSpec
     ) where
 
 import Test.Hspec
+
 import TestUtil
 
-import Text.Parsec (ParseError)
-import Text.Parsec
-import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
-
-import Control.Monad
-import Data.Semigroup -- for <> operator?
-
-import Regex
-import RETree
-
 type Description = String
-type Input = String
-type Result = Maybe RETree
-csvFile :: FilePath
-csvFile = "test/HspecRETree/RECompile.csv"
-unitUnderTest :: Input -> Result
-unitUnderTest = rightToMaybe . reCompile
-  where
-    rightToMaybe (Right r) = Just r
-    rightToMaybe (Left _) = Nothing
+type Input = -- TODO
+type Result = -- TODO
+csvFile :: FilePath = -- TODO
+unitUnderTest :: Input -> Result = -- TODO
+parseExpected :: Text -> Result -- TODO: usually just 'read . Text.unpack $ expected :: Result'
+parseExpected = read
+parseInput :: Text -> Input -- TODO: probably just 'read . Text.unpack $ input :: Input'
+parseInput = read
 
-parseExpected :: Text -> Result
-parseExpected "$FAIL" = Nothing
-parseExpected regex = Just (read . Text.unpack $ regex :: RETree)
 
-parseInput :: Text -> Input
-parseInput = Text.unpack
+
+{-=-=-=-=-=-=-=-= dont change this stuff below =-=-=-=-=-=-=-=-}
 
 doSpec :: Spec
 doSpec = runMyTests unitUnderTest csvFile
