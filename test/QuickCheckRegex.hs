@@ -18,26 +18,26 @@ import RETree
 {- parsing a string of one char yields (Symbol char) if-and-only-if that char is
  - not a meta-character -}
 prop_Char0 c = (reCompile [c] == Right (Symbol c)) /= 
-               (c `elem` mustBeEscaped)
-prop_Char1 = not $ all (\ c -> (reCompile [c]) == Right (Symbol c)) mustBeEscaped
+               (c `elem` metaChars)
+prop_Char1 = not $ all (\ c -> (reCompile [c]) == Right (Symbol c)) metaChars
 
 {- parsing "\c" yields (Symbol c) if-and-only-if c is a meta-character
  -}
-prop_MetaChar0 = all (\ c -> (reCompile ['\\',c]) == Right (Symbol c)) mustBeEscaped
+prop_MetaChar0 = all (\ c -> (reCompile ['\\',c]) == Right (Symbol c)) metaChars
 prop_MetaChar1 c = (reCompile ['\\', c] == Right (Symbol c)) == 
-                   (c `elem` mustBeEscaped)
+                   (c `elem` metaChars)
 
 {- upper bound must be greater than lower bound -}
 prop_QuantifierGreaterThan :: Char -> QC.NonNegative Int -> QC.NonNegative Int -> Property
 prop_QuantifierGreaterThan c (QC.NonNegative l) (QC.NonNegative u) = 
-  l <= u && not (c `elem` mustBeEscaped) && 1 < u ==> 
+  l <= u && not (c `elem` metaChars) && 1 < u ==> 
     ( ((reCompile :: String -> Either ParseError RETree) $ [c] ++ "{" ++ (show l) ++ "," ++ (show u) ++ "}") 
       == 
       Right (Q (Quantifier (Symbol c) l (Upper u) Greedy))
     )
 prop_QuantifierLessThan :: Char -> QC.NonNegative Int -> QC.NonNegative Int -> Property
 prop_QuantifierLessThan c (QC.NonNegative l) (QC.NonNegative u) = 
-    l > u && not (c `elem` mustBeEscaped) ==> 
+    l > u && not (c `elem` metaChars) ==> 
       (isLeft . (reCompile :: String -> Either ParseError RETree) $ [c] ++ "{" ++ (show l) ++ "," ++ (show u) ++ "}")
 
 return []

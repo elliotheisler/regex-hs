@@ -3,7 +3,10 @@ module Regex
     , MatchProgress (..)
     , REParser
     , metaChars
-    , mustBeEscaped
+    , escapedStandinChars
+    , classChars
+    , lookupStandin
+    , lookupClass
     ) where
 
 import Text.Parsec
@@ -47,11 +50,28 @@ instance Show MatchProgress where
 type REParser a = Parsec String () a
 
 -- '{' can optionally be treated literally in most dialects, 
---     so long as it doesnt denote a range ,for example, "a{1,2}"
+--     so long as it doesnt denote a range, for example, "a{1,2}"
 -- this set of 12 are the same amongst most popular modern RE dialects
-metaChars = "\\^$.|?*+()[{"
-mustBeEscaped = "/\\^$.|?*+()["
--- TODO: escaped characters & classes: \w, \t, \n
+quantifierChars = "?*+"
+bracketChars = "()["
+assertionTokens = ["\b", "^", "$"] -- chars that assert something about current state without consuming input
+metaChars = "/\\^$.|" <> bracketChars <> quantifierChars -- characters that always have special meaning. they must be escaped to be treated literally
+classChars = "w" -- TODO: chars that stand in for a character class when escaped
+escapedStandinChars = "a" -- chars that stand in for a different character when escaped
+
+-- TODO:
+lookupStandin :: Char -> Char
+lookupStandin c = case c of
+    'a' -> '\x0007'
+    _   -> undefined
+
+-- TODO: lookupClass :: Char -> CharClass
+-- because need to handle negated classes like \W
+lookupClass :: Char -> [Char]
+lookupClass c = case c of
+    'w' -> ['a'..'z'] <> ['A'..'Z'] <> ['0'..'9'] <> "_"
+    _  -> undefined
+-- TODO: escaped characters classes: \w, \t, \n
 -- TODO: character classes: [a-zA-Z], etc
 -- TODO: negated classes: [^a-z], etc
 -- TODO: possesive & lazy quantifiers?

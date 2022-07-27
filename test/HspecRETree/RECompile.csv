@@ -46,3 +46,7 @@ lone opening parenthesis fails to parse / ( / $FAIL
 lone closing parenthesis fails to parse / ) / $FAIL
 lone square opening bracket fails to parse / [ / $FAIL
 nonsensical range fails to parse / a{3,2}b / $FAIL
+empty char class fails to parse / [] / $FAIL
+
+# character classes
+basic / [a-z] / CharClass ['a'..'z']

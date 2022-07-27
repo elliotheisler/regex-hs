@@ -8,9 +8,7 @@ module RETree
     , LowerBound
     , UpperBound (..)
     , LazyOrGreedy (..)
-    , metaChars
     , unparseTree
---    , reMatchesQfied
     , MatchProgress (..)
     ) where
 
@@ -24,11 +22,11 @@ import Text.Printf (printf)
 import TreePrint
 import Regex
 
--- precedence decreases downward
--- TODO: add capture group constructor
+-- highest precedence parsing at the top
 data RETree = 
     Epsilon -- the empty regular expression. matches everything
   | CaptureGroup RETree
+  | CharClass [Char] -- matches any char contained in here
   | Symbol Char
   | Q Quantifier 
   | Concat [RETree]
@@ -39,6 +37,19 @@ data RETree =
 data Quantifier = Quantifier RETree LowerBound UpperBound LazyOrGreedy deriving (Eq, Read)
 type LowerBound = Int
 data UpperBound = Unlimited | Upper Int deriving (Read, Show, Eq)
+
+instance Show Quantifier where
+    show (Quantifier _ lower upper lG) = handleLazy lG $ case (lower, upper) of
+        (0, Upper 1) -> "?"
+        (0, Unlimited) -> "*"
+        (1, Unlimited) -> "+"
+        (l, Unlimited) -> printf "{%d,}" l
+        (l, Upper u) -> printf "{%d,%d}" l u
+      where 
+        handleLazy Lazy str = str <> "?"
+        handleLazy Greedy str = str
+
+
 
 instance Ord UpperBound where
     _ <= Unlimited = True
@@ -65,18 +76,54 @@ parseConcat = Concat <$> many parseQuantifier
 
 parsePrimary :: TreeParser
 parsePrimary = choice $ try <$> 
-    [ CaptureGroup <$> (between (char '(') (char ')') parseUnion)
-    , Symbol <$> (char '\\' >> oneOf mustBeEscaped) 
-    , Symbol <$> noneOf mustBeEscaped
+    [ CaptureGroup <$> ( (char '(') *> parseUnion <* (char ')') )
+    , Symbol <$> (char '\\' *> oneOf metaChars)
+    , Symbol <$> parseSymbolToken
+    , parseCharClass
     ]
+
+parseCharClass :: TreeParser
+parseCharClass = CharClass <$> ( try ((char '[') *> parseInnerClass <* (char ']')) <|> parseClassToken )
+
+parseInnerClass :: Parsec String () [Char]
+parseInnerClass = do
+    end <- optionMaybe . notFollowedBy $ char ']'
+    case end of 
+        Just _  -> return ""
+        Nothing -> do chClass <- choice [ try parseCharRange
+                                        , try (pure <$> parseSymbolToken)
+                                        , parseClassToken
+                                        ]
+                      (chClass <>) <$> parseInnerClass
+
+parseCharRange :: Parsec String () [Char]
+parseCharRange = do
+    left  <- parseSymbolToken <* char '-'
+    right <- parseSymbolToken
+    let range = [left..right]
+    case range of
+        [] -> fail $ printf "parsed an invalid character range %c-%c" left right
+        s -> return s
+
+parseSymbolToken :: Parsec String () Char
+-- parseSymbolToken: this should try to parse an escaped literal, i.e. \n, \a etc. or a plain character. 
+-- right now it parses just a plain character
+parseSymbolToken = choice [ noneOf metaChars
+                          , parseEscapedStandin
+                          ]
+parseEscapedStandin :: Parsec String () Char
+parseEscapedStandin = lookupStandin <$> (char '\\' *> oneOf escapedStandinChars)
+
+parseClassToken :: Parsec String () [Char]
+parseClassToken = lookupClass <$> (char '\\' *> oneOf classChars)
 
 parseQuantifier :: TreeParser
 parseQuantifier = do
     prim  <- parsePrimary
     range <- optionMaybe parseQuantifier'
-    case range of Just (lower, upper, lazyOrGreed) 
-                    | (Upper lower) <= upper -> return (Q (Quantifier prim lower upper lazyOrGreed))
-                    | otherwise -> fail "parsed an invalid range (upper bound less than lower bound)"
+    case range of Just (lower, upper, lG) 
+                    | (Upper lower) <= upper -> return (Q (Quantifier prim lower upper lG))
+                    | otherwise -> fail $ "parsed an invalid range: " <> show (Quantifier Epsilon lower upper lG)
                   Nothing                 -> return (Q (Quantifier prim 1 (Upper 1) Greedy))
 
 {- parseQuantifier': never fails *with* consuming input
@@ -138,20 +185,6 @@ trimFat' (Union reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
     in  case trimmed of [] -> Nothing
                         [reTree] -> Just reTree
                         trimmedForest -> Just (Union trimmedForest)
-
--- TODO: is this just deriving (Eq)?
--- instance Eq RETree where
---     Epsilon == Epsilon = True
---     Symbol a == Symbol b = a == b
---     Q (Quantifier reTreeA lA uA _) == Q (Quantifier reTreeB lB uB _) = 
---       reTreeA == reTreeB && lA == lB && uA == uB
---     Concat forestA == Concat forestB =
---       all (\(a,b) -> a == b) $ zip forestA forestB
---     Union forestA == Concat forestB =
---       all (\(a,b) -> a == b) $ zip forestA forestB
---     _ == _ = False -- need to explicitly include default case, otherwise get
---                    -- non-exhaustive patterns when running 'stack test'
-
 
 
 {-** RUNREGEX-related functions **-}
@@ -268,6 +301,7 @@ unparseTree reTree = "/" ++ unParse 0 reTree ++ "/"
    precedence 
 -}
 
+-- TODO: implement for newly added data constructors
 unParse :: Int -> RETree -> String
 unParse _ Epsilon = "\x03f5"
 
