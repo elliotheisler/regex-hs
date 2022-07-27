@@ -11,7 +11,6 @@ module RETree
     , metaChars
     , unparseTree
 --    , reSearchQfied
-    , reMatches_
     , MatchProgress (..)
     ) where
 
@@ -126,10 +125,13 @@ trimFat reTree = fromMaybe Epsilon $ trimFat' reTree
 trimFat' :: RETree -> Maybe RETree
 trimFat' (Symbol s) = Just (Symbol s)
 
-trimFat' (CaptureGroup reTree) = CaptureGroup <$> trimFat' reTree
-
-trimFat' (Q (Quantifier reTree 1 (Upper 1) _)) = trimFat' reTree
+-- keep capture groups
+trimFat' (CaptureGroup reTree) = Just . CaptureGroup . trimFat $ reTree
+-- keep capture groups
+trimFat' (Q (Quantifier (CaptureGroup reTree) 0 (Upper 0) lG)) = 
+    Just . (\ rT -> Q (Quantifier (CaptureGroup rT) 0 (Upper 0) lG)) . trimFat $ reTree
 trimFat' (Q (Quantifier reTree 0 (Upper 0) _)) = Nothing
+trimFat' (Q (Quantifier reTree 1 (Upper 1) _)) = trimFat' reTree
 trimFat' (Q (Quantifier reTree lower upper lG)) = 
     (\x -> Q (Quantifier x lower upper lG)) <$> (trimFat' reTree)
 
