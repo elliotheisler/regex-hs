@@ -36,7 +36,13 @@ class RegexRepr r where
 -- string containing input parsed so far
 -- string containing remainder of input
 -- list of progress states snapshotted by inner capture groups so far
-data MatchProgress = MatchProgress String String [MatchProgress] deriving (Eq, Show)
+data MatchProgress = MatchProgress String String [MatchProgress] deriving (Eq)
+
+instance Show MatchProgress where
+    show (MatchProgress consumed remaining groups) = 
+        "\nConsumed : " <> (show . reverse $ consumed) <> 
+        "\nRemaining: " <> show remaining <> 
+        "\nGroups   : " <> show groups <> "\n"
 
 type REParser a = Parsec String () a
 

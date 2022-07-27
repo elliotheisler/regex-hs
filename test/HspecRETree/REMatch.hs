@@ -5,18 +5,27 @@ module HspecRETree.REMatch -- TODO
     ) where
 
 import Test.Hspec
+import Control.Monad
+import Data.Either (fromRight)
+import Data.Text (Text)
+import qualified Data.Text as Text
 
+import Regex
+import RETree
+import Data.Maybe (isJust)
 import TestUtil
 
 type Description = String
-type Input = -- TODO
-type Result = -- TODO
-csvFile :: FilePath = -- TODO
-unitUnderTest :: Input -> Result = -- TODO
-parseExpected :: Text -> Result -- TODO: usually just 'read . Text.unpack $ expected :: Result'
-parseExpected = read
-parseInput :: Text -> Input -- TODO: probably just 'read . Text.unpack $ input :: Input'
-parseInput = read
+type Input = (RETree, [String])
+type Result = [Bool]
+csvFile :: FilePath
+csvFile = "test/HspecRETree/REMatch.csv"
+unitUnderTest :: Input -> Result
+unitUnderTest (reTree, inputs) = isJust <$> reMatch reTree <$> inputs
+parseExpected :: Text -> Result
+parseExpected = read . Text.unpack
+parseInput :: Text -> Input
+parseInput txt = (\(re,inputs) -> (fromRight undefined . reCompile $ re, inputs)) . read . Text.unpack $ txt
 
 
 

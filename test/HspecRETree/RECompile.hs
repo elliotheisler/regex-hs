@@ -5,6 +5,7 @@ module HspecRETree.RECompile
     ) where
 
 import Test.Hspec
+import Control.Monad
 import TestUtil
 
 import Text.Parsec (ParseError)

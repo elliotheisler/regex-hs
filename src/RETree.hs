@@ -10,7 +10,7 @@ module RETree
     , LazyOrGreedy (..)
     , metaChars
     , unparseTree
---    , reSearchQfied
+--    , reMatchesQfied
     , MatchProgress (..)
     ) where
 
@@ -158,22 +158,28 @@ trimFat' (Union reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
 {-************************************************************************************-}
 
 reMatches_ :: RETree -> MatchProgress -> [MatchProgress]
-
-reMatches_ Epsilon state = return state
+-- Epsilon matches everything
+reMatches_ Epsilon state@(MatchProgress consumed "" groups) = [state]
+reMatches_ Epsilon state@(MatchProgress consumed (r:remaining) groups) = 
+  state : ( reMatches_ Epsilon (MatchProgress (r:consumed) remaining groups) )
 
 reMatches_ (Union []) _ = []
-reMatches_ (Union _) (MatchProgress _ "" _) = []
+-- FALSE: you can match nothing with quantifiers -- reMatches_ (Union _) (MatchProgress _ "" _) = []
 reMatches_ (Union (reTree:reForest)) state = 
     reMatches_ reTree state <> reMatches_ (Union reForest) state
     
 reMatches_ (Concat []) state = return state
-reMatches_ (Concat _) (MatchProgress _ "" _) = []
+-- FALSE: you can match nothing with quantifiers -- reMatches_ (Concat _) (MatchProgress _ "" _) = []
 reMatches_ (Concat (reTree:reForest)) state =
     reMatches_ reTree state >>= reMatches_ (Concat reForest) 
 
-reMatches_ (Q qfier@(Quantifier reTree _ _ _)) state = 
-    reSearchQfied [] searcher qfier 0 state
+reMatches_ (Q qfier@(Quantifier reTree lower _ lG)) state
+    | lower == 0 = lazyOrGreedyZeroMatch $ reMatchesQfied searcher qfier 0 state -- see precondition of reMatchesQfied
+    | otherwise  = reMatchesQfied searcher qfier 0 state
   where
+    lazyOrGreedyZeroMatch = case lG of
+      Lazy   -> ([state] <>)
+      Greedy -> (<> [state])
     searcher = reMatches_ reTree
   
 reMatches_ (Symbol _) (MatchProgress _ "" _) = []
@@ -187,26 +193,29 @@ reSearch (CaptureGroup reTree) state@(MatchProgress consumed remaining groups) =
       reSearch reTree state
 
 -- TODO: make Quantifier contain quantifier information only. not RegexRepr child.
-reSearchQfied 
-    :: [MatchProgress]                    
-    -> (MatchProgress -> [MatchProgress]) 
+{- reMatchesQfied: 
+    PRECONDITION: THIS DOES NOT HANDLE MATCHING OF ZERO REPITITIONS! 
+                  must init accumulator with starting state if quantifier accepts zero matches
+-}
+reMatchesQfied 
+    :: (MatchProgress -> [MatchProgress]) 
     -> Quantifier
     -> Int                                
     -> (MatchProgress -> [MatchProgress])
 
--- no more parsing can be done, so return accumulated states.
-reSearchQfied acc _ _ _ (MatchProgress _ "" _) = acc
+-- no more parsing can be done to add new *unique* states, so return accumulated states.
+reMatchesQfied _ _ _ (MatchProgress _ "" _) = []
 
-reSearchQfied acc f qfier@(Quantifier _ lower upper lG) i state
-    | nextStates == [] = acc
+reMatchesQfied f qfier@(Quantifier _ lower upper lG) i state
+    | nextStates == [] = []
     | Upper i >  upper     = undefined -- should never be called with i > upper
-    | Upper i == upper     = acc -- reached the max number of repetitions, now return the collection of states
-    |       i >= lower - 1 = nextStates >>= reSearchQfied lazyOrGreedyUpdate f qfier (i+1) -- accumulate next states
-    | otherwise      = nextStates >>= reSearchQfied acc f qfier (i+1) -- parse another quantified but don't accumulate
+    | Upper i == upper     = [] -- reached the max number of repetitions
+    |       i >= lower - 1 = lazyOrGreedyUpdate $ nextStates >>= reMatchesQfied f qfier (i+1) -- accumulate next states
+    | otherwise            = nextStates >>= reMatchesQfied f qfier (i+1) -- parse another quantified but don't accumulate
   where
     lazyOrGreedyUpdate = case lG of
-      Lazy -> acc <> nextStates
-      Greedy -> nextStates <> acc
+      Lazy   -> (nextStates <>)
+      Greedy -> (<> nextStates)
     nextStates = f state
 
 {- | ~=~: "extensional equivalence"
