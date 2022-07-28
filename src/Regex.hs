@@ -3,6 +3,7 @@ module Regex
     , MatchProgress (..)
     , REParser
     , metaChars
+    , classMetaChars
     , escapedStandinChars
     , classChars
     , lookupStandin
@@ -56,6 +57,8 @@ quantifierChars = "?*+"
 bracketChars = "()["
 assertionTokens = ["\b", "^", "$"] -- chars that assert something about current state without consuming input
 metaChars = "/\\^$.|" <> bracketChars <> quantifierChars -- characters that always have special meaning. they must be escaped to be treated literally
+-- different set of chars have special meaning in a char class
+classMetaChars = "/\\[]"
 classChars = "w" -- TODO: chars that stand in for a character class when escaped
 escapedStandinChars = "a" -- chars that stand in for a different character when escaped
 

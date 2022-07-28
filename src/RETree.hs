@@ -2,15 +2,15 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-module RETree
-    ( RETree (..)
-    , Quantifier (..)
-    , LowerBound
-    , UpperBound (..)
-    , LazyOrGreedy (..)
-    , unparseTree
-    , MatchProgress (..)
-    ) where
+module RETree where
+    -- ( RETree (..)
+    -- , Quantifier (..)
+    -- , LowerBound
+    -- , UpperBound (..)
+    -- , LazyOrGreedy (..)
+    -- , unparseTree
+    -- , MatchProgress (..)
+    -- ) where
 
 import Text.Parsec
 import Text.Parsec.String
@@ -26,7 +26,9 @@ import Regex
 data RETree = 
     Epsilon -- the empty regular expression. matches everything
   | CaptureGroup RETree
-  | CharClass [Char] -- matches any char contained in here
+  | CharClass [Char] Bool -- matches any char contained in here. Bool=True for inverted char class
+                          -- TODO: to support inverted char-classes, better implementatino would be:
+                          --       C (CharClass [Char] Bool [CharClass])
   | Symbol Char
   | Q Quantifier 
   | Concat [RETree]
@@ -78,39 +80,64 @@ parsePrimary :: TreeParser
 parsePrimary = choice $ try <$> 
     [ CaptureGroup <$> ( (char '(') *> parseUnion <* (char ')') )
     , Symbol <$> (char '\\' *> oneOf metaChars)
-    , Symbol <$> parseSymbolToken
+    , Symbol <$> parseSymbolToken metaChars
     , parseCharClass
     ]
 
 parseCharClass :: TreeParser
-parseCharClass = CharClass <$> ( try ((char '[') *> parseInnerClass <* (char ']')) <|> parseClassToken )
+parseCharClass = choice [ try ((char '[') *> parseInnerClass <* (char ']'))
+                        , (\str -> CharClass str True) <$> parseClassToken
+                        ]
 
-parseInnerClass :: Parsec String () [Char]
+parseInnerClass :: Parsec String () RETree -- specifically CharClass
 parseInnerClass = do
-    end <- optionMaybe . notFollowedBy $ char ']'
-    case end of 
-        Just _  -> return ""
-        Nothing -> do chClass <- choice [ try parseCharRange
-                                        , try (pure <$> parseSymbolToken)
-                                        , parseClassToken
-                                        ]
-                      (chClass <>) <$> parseInnerClass
+    inverted <- optionMaybe $ char '^'
+    chClass <- parseCharClasses
+    case chClass of
+        "" -> fail "parsed empty character class"
+        cls -> return $ CharClass cls (case inverted of { Just _ -> True; Nothing -> False })
+
+parseCharClasses :: Parsec String () [Char]
+parseCharClasses = do
+    chClass <- optionMaybe . choice $ try <$> [ parseCharRange
+                                              , (pure <$> parseSymbolToken classMetaChars)
+                                              , parseClassToken
+                                              ]
+    case chClass of
+        Nothing -> return ""
+        Just cls -> (cls <>) <$> parseCharClasses
+
+-- | checks for the case where a char range contains a character-class standin literal as lower or upper bound
+-- hacky and kind of inefficient
+invalidBoundToken :: Parsec String () [Char]
+invalidBoundToken = do
+    choice $ try <$> [ parseClassToken >> char '-' >> pure <$> parseSymbolToken classMetaChars
+                     , parseSymbolToken classMetaChars >> char '-' >> parseClassToken
+                     , parseClassToken >> char '-' >> parseClassToken
+                     ]
+    return ""
 
 parseCharRange :: Parsec String () [Char]
 parseCharRange = do
-    left  <- parseSymbolToken <* char '-'
-    right <- parseSymbolToken
+    notFollowedBy invalidBoundToken
+    left  <- parseSymbolToken classMetaChars
+    char '-'
+    right <- parseSymbolToken classMetaChars
     let range = [left..right]
     case range of
-        [] -> fail $ printf "parsed an invalid character range %c-%c" left right
+        [] -> fail $ printf "parsed invalid character range: %c-%c" left right
         s -> return s
 
-parseSymbolToken :: Parsec String () Char
--- parseSymbolToken: this should try to parse an escaped literal, i.e. \n, \a etc. or a plain character. 
--- right now it parses just a plain character
-parseSymbolToken = choice [ noneOf metaChars
-                          , parseEscapedStandin
-                          ]
+parseSymbolToken :: [Char] -> Parsec String () Char
+-- | parseSymbolToken: this should try to parse a literal symbol, escaped standin, 
+-- i.e. \n, \a etc. , or other escaped character. 
+-- 'metaChars' argument specifies which set of characters are treated as meta-characters 
+-- in this parsing context (its different inside character-classes)
+parseSymbolToken metaChars = choice [ try $ noneOf metaChars
+                                    , try $ parseEscapedStandin
+                                    , char '\\' *> oneOf metaChars
+                                    ]
+
 parseEscapedStandin :: Parsec String () Char
 parseEscapedStandin = lookupStandin <$> (char '\\' *> oneOf escapedStandinChars)
 
@@ -167,6 +194,9 @@ trimFat' (Symbol s) = Just (Symbol s)
 
 -- keep capture groups
 trimFat' (CaptureGroup reTree) = Just . CaptureGroup . trimFat $ reTree
+
+trimFat' c@(CharClass _ _) = Just c
+
 -- keep capture groups
 trimFat' (Q (Quantifier (CaptureGroup reTree) 0 (Upper 0) lG)) = 
     Just . (\ rT -> Q (Quantifier (CaptureGroup rT) 0 (Upper 0) lG)) . trimFat $ reTree
@@ -273,6 +303,7 @@ instance Show RETree where
 instance PrintableTree RETree where
     ptContents Epsilon = unParse 0 Epsilon
     ptContents (CaptureGroup _) = "()"
+    ptContents (CharClass _ _) = "[]"
     ptContents sym@(Symbol _) = unParse 0 sym
     ptContents (Q (Quantifier _ l (Upper u) _))
       | l == 0 && u == 1 = "?"
@@ -287,6 +318,7 @@ instance PrintableTree RETree where
 
     ptForest Epsilon = []
     ptForest (CaptureGroup reTree) = [reTree]
+    ptForest (CharClass chrs _) = Symbol <$> chrs
     ptForest (Symbol _) = []
     ptForest (Q (Quantifier reTree _ _ _)) = [reTree]
     ptForest (Concat reTrees) = reTrees
@@ -302,6 +334,7 @@ unparseTree reTree = "/" ++ unParse 0 reTree ++ "/"
 -}
 
 -- TODO: implement for newly added data constructors
+-- TODO: add a function precedence :: RETree -> Int
 unParse :: Int -> RETree -> String
 unParse _ Epsilon = "\x03f5"
 

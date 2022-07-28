@@ -47,6 +47,15 @@ lone closing parenthesis fails to parse / ) / $FAIL
 lone square opening bracket fails to parse / [ / $FAIL
 nonsensical range fails to parse / a{3,2}b / $FAIL
 empty char class fails to parse / [] / $FAIL
+# char class with improper lower bound fails / [\\w-z] / $FAIL
+# char class with improper upper bound fails / [a-\\w] / $FAIL
+# char class with both improper bounds fails / [\\w-\\w] / $FAIL
+
+
 
 # character classes
-basic / [a-z] / CharClass ['a'..'z']
+# basic0 / [\\a] / CharClass "\a" False
+# basic1 / \\w / CharClass (['a'..'z'] <> ['A'..'Z'] <> ['0'..'9'] <> "_") False
+# basic2 / [a-z] / CharClass ['a'..'z'] False
+basic3 / [\\a-\\a] / CharClass ['\a'..'\a'] False
+
