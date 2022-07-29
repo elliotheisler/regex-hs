@@ -21,7 +21,11 @@ readCSV delim csvFile = sepValues delim <$> pruneEmptys <$> Text.lines <$> Text.
 
 readCommentedCSV :: Text -> FilePath -> IO [[Text]]
 readCommentedCSV delim csvFile =
-    sepValues delim <$> pruneComments <$> pruneEmptys <$> Text.lines <$> Text.readFile csvFile
+    sepValues delim <$> 
+    pruneComments <$> 
+    pruneEmptys <$> 
+    Text.lines <$> 
+    Text.readFile csvFile
   where
     pruneComments :: [Text] -> [Text]
     pruneComments = filter $ not . ("#" `isPrefixOf`)
