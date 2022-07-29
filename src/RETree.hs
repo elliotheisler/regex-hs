@@ -255,7 +255,7 @@ trimFatChC (UnionChC []) = undefined -- shouldnt be able to parse an empty ChC i
 trimFatChC (UnionChC [ccTree]) = trimFatChC ccTree
 trimFatChC (UnionChC ccForest) = case catMaybes $ trimFatChC <$> ccForest of
     [] -> Nothing
-    ccForest' -> Just . Union $ ccForest'
+    ccForest' -> Just . UnionChC $ ccForest'
 
 trimFatChC (NotChC ccTree) = do
     ccTree' <- trimFatChC ccTree
