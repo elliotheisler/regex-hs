@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module RETree where
     -- ( RETree (..)
+    -- , ChC (..)
     -- , Quantifier (..)
     -- , LowerBound
     -- , UpperBound (..)
@@ -14,8 +15,9 @@ module RETree where
 
 import Text.Parsec
 import Text.Parsec.String
+import Data.Char (ord)
 import Data.List (intersperse)
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe, maybeToList)
 import Data.Either (isLeft)
 import Text.Printf (printf)
 
@@ -26,13 +28,17 @@ import Regex
 data RETree = 
     Epsilon -- the empty regular expression. matches everything
   | CaptureGroup RETree
-  | CharClass [Char] Bool -- matches any char contained in here. Bool=True for inverted char class
-                          -- TODO: to support inverted char-classes, better implementatino would be:
-                          --       C (CharClass [Char] Bool [CharClass])
+  | CharClass ChC
   | Symbol Char
   | Q Quantifier 
   | Concat [RETree]
   | Union [RETree]
+  deriving (Eq, Read)
+
+data ChC = 
+    UnionChC [ChC] -- Same as RETree Union. ex: [\wa-z0-9ABC]
+  | RangeChC Char Char -- Match a character in the unicode range denoted by these characters. ex: [a-z]
+  | NotChC ChC -- inverted character class. examples: [^a-z] [^\w] \W
   deriving (Eq, Read)
 
 -- Quantified regex's have their own special complexity so are defined as a seperate type
@@ -64,10 +70,10 @@ instance RegexRepr RETree where
     reMatches reTree input = reMatches_ reTree (MatchProgress "" input [])
 
 
-{-** PARSE-related functions & data **-}
+{-** COMPILE functions & data **-}
 {-************************************************************************************-}
 type TreeParser = REParser RETree
-{- parsePrimary, parseQuantifier, parseConcat, and parseUnion: 
+{- parsePrimary, parseCaptureGroup, parseCharClass, parseQuantifier, parseConcat, and parseUnion: 
    a typical recursive-descent parser, presented in bottom-up order. -}
                        
 parseUnion :: TreeParser
@@ -85,54 +91,83 @@ parsePrimary = choice $ try <$>
     ]
 
 parseCharClass :: TreeParser
-parseCharClass = choice [ try ((char '[') *> parseInnerClass <* (char ']'))
-                        , (\str -> CharClass str True) <$> parseClassToken
+parseCharClass = choice [ CharClass <$> try ((char '[') *> parseInnerClass <* (char ']'))
+                        , CharClass <$> parseClassToken
                         ]
 
-parseInnerClass :: Parsec String () RETree -- specifically CharClass
+{-** ChC parser **-}
+-- parseInnerClass: calls parseUnionChC
+-- parseUnionChC: calls parseRangeChC, parseSymbolToken, parseClassToken
+-- parseRangeChc: calls parseSymbolToken, invalidBoundTokenRange
+-- invalidBoundTokenRange
+-- parseClassToken: calls lookupClass
+-- lookupClass
+{-************************************************************************************-}
+parseInnerClass :: Parsec String () ChC
 parseInnerClass = do
     inverted <- optionMaybe $ char '^'
-    chClass <- parseCharClasses
+    chClass <- parseUnionChC
     case chClass of
-        "" -> fail "parsed empty character class"
-        cls -> return $ CharClass cls (case inverted of { Just _ -> True; Nothing -> False })
+        UnionChC [] -> fail "parsed illegal empty character class"
+        cls -> return $ case inverted of
+                            Just _  -> NotChC cls
+                            Nothing -> cls
 
-parseCharClasses :: Parsec String () [Char]
-parseCharClasses = do
-    chClass <- optionMaybe . choice $ try <$> [ parseCharRange
-                                              , (pure <$> parseSymbolToken classMetaChars)
-                                              , parseClassToken
-                                              ]
-    case chClass of
-        Nothing -> return ""
-        Just cls -> (cls <>) <$> parseCharClasses
 
--- | checks for the case where a char range contains a character-class standin literal as lower or upper bound
--- hacky and kind of inefficient
-invalidBoundToken :: Parsec String () [Char]
-invalidBoundToken = do
-    choice $ try <$> [ parseClassToken >> char '-' >> pure <$> parseSymbolToken classMetaChars
-                     , parseSymbolToken classMetaChars >> char '-' >> parseClassToken
-                     , parseClassToken >> char '-' >> parseClassToken
-                     ]
-    return ""
+parseUnionChC :: Parsec String () ChC
+parseUnionChC = do
+    maybeCls <- optionMaybe . choice $ try <$> [ parseRangeChC
+                                               , ((\ c -> RangeChC c c) <$> parseSymbolToken classMetaChars)
+                                               , parseClassToken
+                                               ]
+    case maybeCls of
+        Nothing -> return $ UnionChC []
+        Just cls -> (\(UnionChC cz) -> UnionChC (cls : cz)) <$> parseUnionChC
 
-parseCharRange :: Parsec String () [Char]
-parseCharRange = do
-    notFollowedBy invalidBoundToken
+parseRangeChC :: Parsec String () ChC
+parseRangeChC = do
+    notFollowedBy invalidBoundTokenRange
     left  <- parseSymbolToken classMetaChars
     char '-'
     right <- parseSymbolToken classMetaChars
-    let range = [left..right]
-    case range of
-        [] -> fail $ printf "parsed invalid character range: %c-%c" left right
-        s -> return s
+    if ord left > ord right
+        then fail $ printf "parsed invalid character range: %c-%c" left right
+        else return (RangeChC left right)
+
+-- | checks for the case where a char range contains a character-class standin literal as lower or upper bound
+-- hacky and kind of inefficient
+invalidBoundTokenRange :: Parsec String () ()
+invalidBoundTokenRange = do
+    choice $ try <$> [ parseClassToken >> char '-' >> parseSymbolToken classMetaChars >> dummyChC
+                     , parseSymbolToken classMetaChars >> char '-' >> parseClassToken
+                     , parseClassToken >> char '-' >> parseClassToken
+                     ]
+    return ()
+  where
+    dummyChC = return $ RangeChC '\x0' '\x0' -- dummy value to comply with types
+
+parseClassToken :: Parsec String () ChC
+parseClassToken = lookupClass <$> (char '\\' *> oneOf classChars)
+
+lookupClass :: Char -> ChC
+lookupClass c = case c of
+    'w' -> UnionChC [ (RangeChC 'a' 'z')
+                    , (RangeChC 'A' 'Z')
+                    , (RangeChC '0' '9')
+                    , (RangeChC '_' '_')
+                    ]
+    'W' -> NotChC $ lookupClass 'w'
+    _  -> undefined
+
+
+{-************************************************************************************-}
 
 parseSymbolToken :: [Char] -> Parsec String () Char
--- | parseSymbolToken: this should try to parse a literal symbol, escaped standin, 
--- i.e. \n, \a etc. , or other escaped character. 
--- 'metaChars' argument specifies which set of characters are treated as meta-characters 
--- in this parsing context (its different inside character-classes)
+-- | parseSymbolToken: this should try to parse a literal symbol, 
+-- escaped standin for a different character (i.e. \n, \a etc.)
+-- or other escaped character. 
+-- 'metaChars' argument specifies which set of characters are treated as 
+-- meta-characters in this parsing context (its different inside character-classes)
 parseSymbolToken metaChars = choice [ try $ noneOf metaChars
                                     , try $ parseEscapedStandin
                                     , char '\\' *> oneOf metaChars
@@ -140,9 +175,6 @@ parseSymbolToken metaChars = choice [ try $ noneOf metaChars
 
 parseEscapedStandin :: Parsec String () Char
 parseEscapedStandin = lookupStandin <$> (char '\\' *> oneOf escapedStandinChars)
-
-parseClassToken :: Parsec String () [Char]
-parseClassToken = lookupClass <$> (char '\\' *> oneOf classChars)
 
 parseQuantifier :: TreeParser
 parseQuantifier = do
@@ -153,14 +185,14 @@ parseQuantifier = do
                     | otherwise -> fail $ "parsed an invalid range: " <> show (Quantifier Epsilon lower upper lG)
                   Nothing                 -> return (Q (Quantifier prim 1 (Upper 1) Greedy))
 
-{- parseQuantifier': never fails *with* consuming input
+{- parseQuantifier': only fails without consuming input
  -}
 parseQuantifier' :: Parsec String () (LowerBound, UpperBound, LazyOrGreedy)
 parseQuantifier' = do 
     (lower, upper) <- choice [ (\_ -> (1, Unlimited)) <$> char '+'
                              , (\_ -> (0, Unlimited)) <$> char '*'
                              , (\_ -> (0, (Upper 1))) <$> char '?'
-                             , try parseRange -- dont consume input upon failure here
+                             , try parseRange -- dont consume input upon failure here either
                              ]
     lazyOrGreedy <- option Greedy $ (\_ -> Lazy) <$> char '?'
     return ( lower
@@ -195,7 +227,9 @@ trimFat' (Symbol s) = Just (Symbol s)
 -- keep capture groups
 trimFat' (CaptureGroup reTree) = Just . CaptureGroup . trimFat $ reTree
 
-trimFat' c@(CharClass _ _) = Just c
+trimFat' (CharClass chC) = do
+    chC <- trimFatChC chC
+    Just . CharClass $ chC
 
 -- keep capture groups
 trimFat' (Q (Quantifier (CaptureGroup reTree) 0 (Upper 0) lG)) = 
@@ -216,8 +250,21 @@ trimFat' (Union reForest  ) = let trimmed = catMaybes (trimFat' <$> reForest)
                         [reTree] -> Just reTree
                         trimmedForest -> Just (Union trimmedForest)
 
+trimFatChC :: ChC -> Maybe ChC
+trimFatChC (UnionChC []) = undefined -- shouldnt be able to parse an empty ChC in the first place
+trimFatChC (UnionChC [ccTree]) = trimFatChC ccTree
+trimFatChC (UnionChC ccForest) = case catMaybes $ trimFatChC <$> ccForest of
+    [] -> Nothing
+    ccForest' -> Just . Union $ ccForest'
 
-{-** RUNREGEX-related functions **-}
+trimFatChC (NotChC ccTree) = do
+    ccTree' <- trimFatChC ccTree
+    Just . NotChC $ ccTree'
+
+trimFatChC r = Just r
+
+
+{-** RUNREGEX functions **-}
 {-************************************************************************************-}
 
 reMatches_ :: RETree -> MatchProgress -> [MatchProgress]
@@ -250,10 +297,12 @@ reMatches_ (Symbol s) (MatchProgress consumed (r:remaining) groups)
   | s == r = [MatchProgress (r:consumed) remaining groups]
   | otherwise = []
 
-reSearch (CaptureGroup reTree) state@(MatchProgress consumed "" groups) = return state
-reSearch (CaptureGroup reTree) state@(MatchProgress consumed remaining groups) = 
+-- FALSE: you can match nothing with quantifiers -- reMatches_ (CaptureGroup reTree) state@(MatchProgress consumed "" groups) = return state
+reMatches_ (CaptureGroup reTree) state@(MatchProgress consumed remaining groups) =
     ( \(MatchProgress c r g) -> MatchProgress c r [MatchProgress c r g] ) <$> 
-      reSearch reTree state
+      reMatches_ reTree state
+
+reMatches_ (CharClass chC) state = maybeToList $ reMatchesChC chC state
 
 -- TODO: make Quantifier contain quantifier information only. not RegexRepr child.
 {- reMatchesQfied: 
@@ -281,6 +330,23 @@ reMatchesQfied f qfier@(Quantifier _ lower upper lG) i state
       Greedy -> (<> nextStates)
     nextStates = f state
 
+reMatchesChC :: ChC -> MatchProgress -> Maybe MatchProgress
+-- there must be at least one char for a character class to parse:
+reMatchesChC _ (MatchProgress _ "" _) = Nothing
+
+reMatchesChC (RangeChC lower upper) (MatchProgress consumed (c:remaining) groups)
+    | ord lower <= ord c && ord c <= ord upper = Just (MatchProgress (c:consumed) remaining groups)
+    | otherwise = Nothing
+
+reMatchesChC (NotChC ccTree) mP@(MatchProgress consumed (c:remaining) groups) = case reMatchesChC ccTree mP of
+    Just _  -> Nothing
+    Nothing -> Just (MatchProgress (c:consumed) remaining groups)
+
+reMatchesChC (UnionChC []) _ = Nothing
+reMatchesChC (UnionChC (cT:ccForest)) mP = case reMatchesChC cT mP of
+    Nothing -> reMatchesChC (UnionChC ccForest) mP
+    Just mP -> Just mP
+
 {- | ~=~: "extensional equivalence"
    a ~=~ b is true iff when applied to a higher order function (i.e. reMatches_), a and b 
    produce extensionally equivalent functions. this should be true if-and-only-if their 
@@ -295,15 +361,15 @@ treeA ~=~ treeB = trimmedA == trimmedB
 
 
 
-{-** SHOW-related functions **-}
+{-** SHOW functions **-}
 {-************************************************************************************-}
 instance Show RETree where
-    show = ptShow -- from PrintableTree instance
+    show = ptShow -- for instsances of PrintableTree
 
 instance PrintableTree RETree where
     ptContents Epsilon = unParse 0 Epsilon
     ptContents (CaptureGroup _) = "()"
-    ptContents (CharClass _ _) = "[]"
+    ptContents (CharClass cc) = ptContents cc
     ptContents sym@(Symbol _) = unParse 0 sym
     ptContents (Q (Quantifier _ l (Upper u) _))
       | l == 0 && u == 1 = "?"
@@ -313,16 +379,29 @@ instance PrintableTree RETree where
       | l == 0 = "(*)"
       | l == 1 = "(+)"
       | otherwise = "{" ++ show l ++ ",}"
-    ptContents (Concat _) = "(++)"
+    ptContents (Concat _) = "(<>)"
     ptContents (Union  _) = "(|)"
 
     ptForest Epsilon = []
     ptForest (CaptureGroup reTree) = [reTree]
-    ptForest (CharClass chrs _) = Symbol <$> chrs
+    ptForest (CharClass chC) = CharClass <$> ptForest chC
     ptForest (Symbol _) = []
     ptForest (Q (Quantifier reTree _ _ _)) = [reTree]
     ptForest (Concat reTrees) = reTrees
     ptForest (Union  reTrees) = reTrees
+
+instance Show ChC where
+    show = ptShow
+
+instance PrintableTree ChC where
+    ptContents (UnionChC _) = "[|]"
+    ptContents (NotChC ccTree) = "[^]"
+    ptContents (RangeChC lower upper)
+        | lower == upper = printf "[%c]" lower
+        | otherwise      = printf "[%c-%c]" lower upper
+    ptForest (RangeChC _ _) = []
+    ptForest (UnionChC ccForest) = ccForest
+    ptForest (NotChC ccTree) = [ccTree]
 
 {- unparseTree :: exactly what you would expect :)
 -}

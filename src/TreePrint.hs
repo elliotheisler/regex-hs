@@ -1,3 +1,4 @@
+-- {-# LANGUAGE FlexibleContexts #-}
 -- {-# LANGUAGE MultiParamTypeClasses #-}
 -- {-# LANGUAGE FunctionalDependencies #-}
 -- {-# LANGUAGE FlexibleInstances #-}
@@ -130,8 +131,8 @@ ptShow' tree =
       )
 
     {- ~~~Step 3: construct TopMidBot representation.
-       note that the top and bottom of the *middle representation* 
-       is concatenated onto top and bottom lists, respectively -}
+       note that the top and bottom rows of the *middle's representation* 
+       is concatenated onto top and bottom character grids, respectively -}
 
     (midTop, midMid, midBot) = padMiddle mChild
     top = (concatReprs . padTops $ lChildren) ++ midTop

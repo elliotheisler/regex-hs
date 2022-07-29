@@ -47,15 +47,17 @@ lone closing parenthesis fails to parse / ) / $FAIL
 lone square opening bracket fails to parse / [ / $FAIL
 nonsensical range fails to parse / a{3,2}b / $FAIL
 empty char class fails to parse / [] / $FAIL
-# char class with improper lower bound fails / [\\w-z] / $FAIL
-# char class with improper upper bound fails / [a-\\w] / $FAIL
-# char class with both improper bounds fails / [\\w-\\w] / $FAIL
-
-
+char class with improper lower bound fails / [\w-z] / $FAIL
+char class with improper upper bound fails / [a-\w] / $FAIL
+char class with both improper bounds fails / [\w-\w] / $FAIL
 
 # character classes
-# basic0 / [\\a] / CharClass "\a" False
-# basic1 / \\w / CharClass (['a'..'z'] <> ['A'..'Z'] <> ['0'..'9'] <> "_") False
-# basic2 / [a-z] / CharClass ['a'..'z'] False
-basic3 / [\\a-\\a] / CharClass ['\a'..'\a'] False
+char-class containing one char should be a range / [\a] / CharClass (RangeChC '\a' '\a')
+range of same character should also be a range / [\a-\a] / CharClass (RangeChC '\a' '\a')
+shorthand esc sequence / \w / CharClass (UnionChC [ (RangeChC 'a' 'z'), (RangeChC 'A' 'Z'), (RangeChC '0' '9'), (RangeChC "_" "_") ])
+[\w] and \w should be the same / [\w] / CharClass (UnionChC [ (RangeChC 'a' 'z'), (RangeChC 'A' 'Z'), (RangeChC '0' '9'), (RangeChC "_" "_") ])
+inverted shorthand esc sequence / \W / CharClass (NotChC (UnionChC [ (RangeChC 'a' 'z'), (RangeChC 'A' 'Z'), (RangeChC '0' '9'), (RangeChC "_" "_") ]))
+basic range / [a-z] / CharClass (RangeChC 'a' 'z')
+inverted basic range / [^a-b] / (NotChC (RangeChC 'a' 'b'))
+complex range / [a-z\a0-Z] / CharClass (UnionChC [(RangeChC 'a' 'z'), (RangeChC '\a' '\a'), (RangeChC '0' 'Z')])
 

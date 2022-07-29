@@ -7,7 +7,6 @@ module Regex
     , escapedStandinChars
     , classChars
     , lookupStandin
-    , lookupClass
     ) where
 
 import Text.Parsec
@@ -59,7 +58,7 @@ assertionTokens = ["\b", "^", "$"] -- chars that assert something about current 
 metaChars = "/\\^$.|" <> bracketChars <> quantifierChars -- characters that always have special meaning. they must be escaped to be treated literally
 -- different set of chars have special meaning in a char class
 classMetaChars = "/\\[]"
-classChars = "w" -- TODO: chars that stand in for a character class when escaped
+classChars = "wW" -- TODO: chars that stand in for a character class when escaped
 escapedStandinChars = "a" -- chars that stand in for a different character when escaped
 
 -- TODO:
@@ -68,12 +67,6 @@ lookupStandin c = case c of
     'a' -> '\x0007'
     _   -> undefined
 
--- TODO: lookupClass :: Char -> CharClass
--- because need to handle negated classes like \W
-lookupClass :: Char -> [Char]
-lookupClass c = case c of
-    'w' -> ['a'..'z'] <> ['A'..'Z'] <> ['0'..'9'] <> "_"
-    _  -> undefined
 -- TODO: escaped characters classes: \w, \t, \n
 -- TODO: character classes: [a-zA-Z], etc
 -- TODO: negated classes: [^a-z], etc

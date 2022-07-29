@@ -1,0 +1,9 @@
+--! matching capture groups is broken
+--! something wrong with the RECompile test driver when running the \w \W tests and other things
+
+TODO:
+--!! TODO: make Quantifier contain quantifier information only. not RegexRepr child.
+--! break up RETree into smaller submodules
+-- implement all escaped character/character-class stand-ins
+--! TODO: implement unParse for newly added data constructors
+--! TODO: add a function precedence :: RETree -> Int
