@@ -2,16 +2,16 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-module RETree where
-    -- ( RETree (..)
-    -- , ChC (..)
-    -- , Quantifier (..)
-    -- , LowerBound
-    -- , UpperBound (..)
-    -- , LazyOrGreedy (..)
-    -- , unparseTree
-    -- , MatchProgress (..)
-    -- ) where
+module RETree -- where
+    ( RETree (..)
+    , ChC (..)
+    , Quantifier (..)
+    , LowerBound
+    , UpperBound (..)
+    , LazyOrGreedy (..)
+    , unparseTree
+    , MatchProgress (..)
+    ) where
 
 import Text.Parsec
 import Text.Parsec.String
