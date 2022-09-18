@@ -1,6 +1,9 @@
---!!! matching capture groups is broken
+--!!! implement this functionality for capture groups:
+      from regex101.com: A repeated capturing group will only capture the last iteration
 
 TODO:
+--!!! verify capture groups are working
+--! implement tree- rather than list-structure for captured groups
 --!! TODO: make Quantifier contain quantifier information only. not RegexRepr child.
 --(ongoing) break up RETree into smaller submodules
 -- implement all escaped character/character-class stand-ins

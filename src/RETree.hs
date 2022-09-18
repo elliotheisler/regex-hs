@@ -10,14 +10,13 @@ module RETree -- where
     , UpperBound (..)
     , LazyOrGreedy (..)
     , unparseTree
-    , MatchProgress (..)
     ) where
 
 import Text.Parsec
 import Text.Parsec.String
 import Data.Char (ord)
-import Data.List (intersperse)
-import Data.Maybe (catMaybes, fromMaybe, maybeToList)
+import Data.List (intersperse, stripPrefix)
+import Data.Maybe (catMaybes, fromMaybe, fromJust, maybeToList)
 import Data.Either (isLeft)
 import Text.Printf (printf)
 
@@ -27,7 +26,7 @@ import Regex
 -- highest precedence parsing at the top
 data RETree = 
     Epsilon -- the empty regular expression. matches everything
-  | CaptureGroup RETree
+  | CaptureTree RETree
   | CharClass ChC
   | Symbol Char
   | Q Quantifier 
@@ -84,7 +83,7 @@ parseConcat = Concat <$> many parseQuantifier
 
 parsePrimary :: TreeParser
 parsePrimary = choice $ try <$> 
-    [ CaptureGroup <$> ( (char '(') *> parseUnion <* (char ')') )
+    [ CaptureTree <$> ( (char '(') *> parseUnion <* (char ')') )
     , Symbol <$> (char '\\' *> oneOf metaChars)
     , Symbol <$> parseSymbolToken metaChars
     , parseCharClass
@@ -226,15 +225,15 @@ trimFat' :: RETree -> Maybe RETree
 trimFat' (Symbol s) = Just (Symbol s)
 
 -- keep capture groups
-trimFat' (CaptureGroup reTree) = Just . CaptureGroup . trimFat $ reTree
+trimFat' (CaptureTree reTree) = Just . CaptureTree . trimFat $ reTree
 
 trimFat' (CharClass chC) = do
     chC <- trimFatChC chC
     Just . CharClass $ chC
 
 -- keep capture groups
-trimFat' (Q (Quantifier (CaptureGroup reTree) 0 (Upper 0) lG)) = 
-    Just . (\ rT -> Q (Quantifier (CaptureGroup rT) 0 (Upper 0) lG)) . trimFat $ reTree
+trimFat' (Q (Quantifier (CaptureTree reTree) 0 (Upper 0) lG)) = 
+    Just . (\ rT -> Q (Quantifier (CaptureTree rT) 0 (Upper 0) lG)) . trimFat $ reTree
 trimFat' (Q (Quantifier reTree 0 (Upper 0) _)) = Nothing
 trimFat' (Q (Quantifier reTree 1 (Upper 1) _)) = trimFat' reTree
 trimFat' (Q (Quantifier reTree lower upper lG)) = 
@@ -298,10 +297,27 @@ reMatches_ (Symbol s) (MatchProgress consumed (r:remaining) groups)
   | s == r = [MatchProgress (r:consumed) remaining groups]
   | otherwise = []
 
--- FALSE: you can match nothing with quantifiers -- reMatches_ (CaptureGroup reTree) state@(MatchProgress consumed "" groups) = return state
-reMatches_ (CaptureGroup reTree) state@(MatchProgress consumed remaining groups) =
-    ( \(MatchProgress c r g) -> MatchProgress c r [MatchProgress c r g] ) <$> 
-      reMatches_ reTree state
+-- FALSE: you can match nothing with quantifiers -- reMatches_ (CaptureTree reTree) state@(MatchProgress consumed "" groups) = return state
+reMatches_ (CaptureTree reTree) state@(MatchProgress consumed remaining groups) =
+    nxtStatesWithCapture
+  where
+    -- step 1: compute the next states with empty group counter
+    -- notice that the groups accumulator is set to empty
+    nxtStates = reMatches_ reTree (MatchProgress consumed remaining [])
+    -- step 2: for each next state, determine what was captured and store it in the
+    -- correct position in the groups field
+    nxtStatesWithCapture = recordGroup <$> nxtStates
+    recordGroup (MatchProgress nxtConsumed r nxtGroups) =
+        MatchProgress 
+          nxtConsumed 
+          r 
+        -- get just the difference i.e. just the string consumed in this capture group
+        -- and insert it *before* the succeeding groups, but *after* the groups captured so
+        -- far.
+          (  groups
+          ++ [CaptureGroup . fromJust . stripPrefix (reverse consumed) $ reverse nxtConsumed]
+          ++ nxtGroups
+          )
 
 reMatches_ (CharClass chC) state = maybeToList $ reMatchesChC chC state
 
@@ -369,7 +385,7 @@ instance Show RETree where
 
 instance PrintableTree RETree where
     ptContents Epsilon = unParse 0 Epsilon
-    ptContents (CaptureGroup _) = "()"
+    ptContents (CaptureTree _) = "()"
     ptContents (CharClass cc) = ptContents cc
     ptContents sym@(Symbol _) = unParse 0 sym
     ptContents (Q (Quantifier _ l (Upper u) _))
@@ -384,7 +400,7 @@ instance PrintableTree RETree where
     ptContents (Union  _) = "(|)"
 
     ptForest Epsilon = []
-    ptForest (CaptureGroup reTree) = [reTree]
+    ptForest (CaptureTree reTree) = [reTree]
     ptForest (CharClass chC) = CharClass <$> ptForest chC
     ptForest (Symbol _) = []
     ptForest (Q (Quantifier reTree _ _ _)) = [reTree]

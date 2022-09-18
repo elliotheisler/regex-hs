@@ -1,6 +1,7 @@
 module Regex
     ( RegexRepr (..)
     , MatchProgress (..)
+    , CaptureGroup (..)
     , REParser
     , metaChars
     , classMetaChars
@@ -39,7 +40,8 @@ class RegexRepr r where
 -- string containing input parsed so far
 -- string containing remainder of input
 -- list of progress states snapshotted by inner capture groups so far
-data MatchProgress = MatchProgress String String [MatchProgress] deriving (Eq)
+data MatchProgress = MatchProgress String String [CaptureGroup] deriving (Eq, Read)
+data CaptureGroup = CaptureGroup String deriving (Eq, Read, Show)
 
 instance Show MatchProgress where
     show (MatchProgress consumed remaining groups) = 

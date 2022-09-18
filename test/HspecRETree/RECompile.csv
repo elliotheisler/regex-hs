@@ -24,12 +24,12 @@ union of repetitions of nothing evals to Epsilon / a{0,0}b{0,0}|W{1,1}|n{0,0} / 
 '{}' range quantifier Unlimited lazy / a{2,}? / Q (Quantifier (Symbol 'a') 2 Unlimited Lazy)
 
 # capture groups
-empty capture group evaluates to group of Epsilon / () / CaptureGroup Epsilon
-capture group of thing evaluates to group of that thing / (a) / CaptureGroup (Symbol 'a')
-capture group preserved in zero quantifier / (p){0,0} / Q (Quantifier (CaptureGroup (Symbol 'p')) 0 (Upper 0) Greedy)
-empty capture group preserved in union / ()|a{0,0}|() / Union [(CaptureGroup Epsilon), (CaptureGroup Epsilon)]
-empty capture group preserved in concat / ()a() / Concat [(CaptureGroup Epsilon), (Symbol 'a'), (CaptureGroup Epsilon)]
-empty capture groups preserved in zero quantifier or in union / (ab){0,0}|a{0,0}|() / Union [(Q (Quantifier (CaptureGroup (Concat [(Symbol 'a'), (Symbol 'b')])) 0 (Upper 0) Greedy)), (CaptureGroup Epsilon)]
+empty capture group evaluates to group of Epsilon / () / CaptureTree Epsilon
+capture group of thing evaluates to group of that thing / (a) / CaptureTree (Symbol 'a')
+capture group preserved in zero quantifier / (p){0,0} / Q (Quantifier (CaptureTree (Symbol 'p')) 0 (Upper 0) Greedy)
+empty capture group preserved in union / ()|a{0,0}|() / Union [(CaptureTree Epsilon), (CaptureTree Epsilon)]
+empty capture group preserved in concat / ()a() / Concat [(CaptureTree Epsilon), (Symbol 'a'), (CaptureTree Epsilon)]
+empty capture groups preserved in zero quantifier or in union / (ab){0,0}|a{0,0}|() / Union [(Q (Quantifier (CaptureTree (Concat [(Symbol 'a'), (Symbol 'b')])) 0 (Upper 0) Greedy)), (CaptureTree Epsilon)]
 
 # non-ranges
 '{' does not denote start of a range for $THIS / a{ / Concat [Symbol 'a', Symbol '{']
