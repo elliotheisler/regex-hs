@@ -116,6 +116,8 @@ parseInnerClass = do
 
 parseUnionChC :: Parsec String () ChC
 parseUnionChC = do
+    -- lookahead to check that both <a> and <b> in a sequence "<a>-<b>" are symbol tokens:
+    notFollowedBy invalidBoundTokenRange 
     maybeCls <- optionMaybe . choice $ try <$> [ parseRangeChC
                                                , ((\ c -> RangeChC c c) <$> parseSymbolToken classMetaChars)
                                                , parseClassToken
@@ -126,7 +128,6 @@ parseUnionChC = do
 
 parseRangeChC :: Parsec String () ChC
 parseRangeChC = do
-    notFollowedBy invalidBoundTokenRange
     left  <- parseSymbolToken classMetaChars
     char '-'
     right <- parseSymbolToken classMetaChars
