@@ -20,7 +20,7 @@ union of repetitions of nothing evals to Epsilon / a{0,0}b{0,0}|W{1,1}|n{0,0} / 
 '*' quantifier lazy / a*? / Q (Quantifier (Symbol 'a') 0 Unlimited Lazy)
 '+' quantifier lazy / a+? / Q (Quantifier (Symbol 'a') 1 Unlimited Lazy)
 '?' quantifier lazy / a?? / Q (Quantifier (Symbol 'a') 0 (Upper 1) Lazy)
-'{}' range quantifier greedy / a{2,3}? / Q (Quantifier (Symbol 'a') 2 (Upper 3) Lazy)
+'{}' range quantifier lazy / a{2,3}? / Q (Quantifier (Symbol 'a') 2 (Upper 3) Lazy)
 '{}' range quantifier Unlimited lazy / a{2,}? / Q (Quantifier (Symbol 'a') 2 Unlimited Lazy)
 
 # capture groups
