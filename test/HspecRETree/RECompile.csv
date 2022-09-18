@@ -54,10 +54,10 @@ char class with both improper bounds fails / [\w-\w] / $FAIL
 # character classes
 char-class containing one char should be a range / [\a] / CharClass (RangeChC '\a' '\a')
 range of same character should also be a range / [\a-\a] / CharClass (RangeChC '\a' '\a')
-shorthand esc sequence / \w / CharClass (UnionChC [ (RangeChC 'a' 'z'), (RangeChC 'A' 'Z'), (RangeChC '0' '9'), (RangeChC "_" "_") ])
-[\w] and \w should be the same / [\w] / CharClass (UnionChC [ (RangeChC 'a' 'z'), (RangeChC 'A' 'Z'), (RangeChC '0' '9'), (RangeChC "_" "_") ])
-inverted shorthand esc sequence / \W / CharClass (NotChC (UnionChC [ (RangeChC 'a' 'z'), (RangeChC 'A' 'Z'), (RangeChC '0' '9'), (RangeChC "_" "_") ]))
+shorthand esc sequence / \w / CharClass (UnionChC [ (RangeChC 'a' 'z'), (RangeChC 'A' 'Z'), (RangeChC '0' '9'), (RangeChC '_' '_') ])
+[\w] and \w should be the same / [\w] / CharClass (UnionChC [ (RangeChC 'a' 'z'), (RangeChC 'A' 'Z'), (RangeChC '0' '9'), (RangeChC '_' '_') ])
+inverted shorthand esc sequence / \W / CharClass (NotChC (UnionChC [ (RangeChC 'a' 'z'), (RangeChC 'A' 'Z'), (RangeChC '0' '9'), (RangeChC '_' '_') ]))
 basic range / [a-z] / CharClass (RangeChC 'a' 'z')
-inverted basic range / [^a-b] / (NotChC (RangeChC 'a' 'b'))
+inverted basic range / [^a-b] / CharClass (NotChC (RangeChC 'a' 'b'))
 complex range / [a-z\a0-Z] / CharClass (UnionChC [(RangeChC 'a' 'z'), (RangeChC '\a' '\a'), (RangeChC '0' 'Z')])
 
