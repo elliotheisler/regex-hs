@@ -284,13 +284,14 @@ reMatches_ (Concat (reTree:reForest)) state =
     reMatches_ reTree state >>= reMatches_ (Concat reForest) 
 
 reMatches_ (Q qfier@(Quantifier reTree lower _ lG)) state
-    | lower == 0 = lazyOrGreedyZeroMatch $ reMatchesQfied searcher qfier 0 state -- see precondition of reMatchesQfied
-    | otherwise  = reMatchesQfied searcher qfier 0 state
+    | lower == 0 = lazyOrGreedyZeroMatch $ reMatchesQfied reMatcher qfier 0 state 
+    | otherwise  = reMatchesQfied reMatcher qfier 0 state
   where
+-- see precondition of reMatchesQfied
     lazyOrGreedyZeroMatch = case lG of
       Lazy   -> ([state] <>)
       Greedy -> (<> [state])
-    searcher = reMatches_ reTree
+    reMatcher = reMatches_ reTree
   
 reMatches_ (Symbol _) (MatchProgress _ "" _) = []
 reMatches_ (Symbol s) (MatchProgress consumed (r:remaining) groups)
@@ -323,29 +324,37 @@ reMatches_ (CharClass chC) state = maybeToList $ reMatchesChC chC state
 
 -- TODO: make Quantifier contain quantifier information only. not RegexRepr child.
 {- reMatchesQfied: 
-    PRECONDITION: THIS DOES NOT HANDLE MATCHING OF ZERO REPITITIONS! 
+    PRECONDITION: THIS DOES NOT HANDLE MATCHING OF ZERO REPETITIONS! 
                   must init accumulator with starting state if quantifier accepts zero matches
 -}
+
 reMatchesQfied 
-    :: (MatchProgress -> [MatchProgress]) 
+    :: (MatchProgress -> [MatchProgress])
     -> Quantifier
     -> Int                                
-    -> (MatchProgress -> [MatchProgress])
+    -> MatchProgress 
+    -> [MatchProgress]
 
 -- no more parsing can be done to add new *unique* states, so return accumulated states.
 reMatchesQfied _ _ _ (MatchProgress _ "" _) = []
 
-reMatchesQfied f qfier@(Quantifier _ lower upper lG) i state
-    | nextStates == [] = []
-    | Upper i >  upper     = undefined -- should never be called with i > upper
-    | Upper i == upper     = [] -- reached the max number of repetitions
-    |       i >= lower - 1 = lazyOrGreedyUpdate $ nextStates >>= reMatchesQfied f qfier (i+1) -- accumulate next states
-    | otherwise            = nextStates >>= reMatchesQfied f qfier (i+1) -- parse another quantified but don't accumulate
+reMatchesQfied reMatcher qfier@(Quantifier _ lower upper lG) i state@(MatchProgress _ _ groups)
+-- should never occur
+    | Upper i >  upper     = undefined 
+-- at any point, dont try to match anymore repetitions if this one fails
+    | nextStates == []     = []
+-- 3. reached the max number of repetitions
+    | Upper i == upper     = [] 
+-- 2. begin accumulating next states
+    |       i >= lower - 1 = lazyOrGreedyUpdate $ 
+                                 nextStates >>= reMatchesQfied reMatcher qfier (i+1) 
+-- 1. parse this repetition but don't accumulate
+    | otherwise            = nextStates >>= reMatchesQfied reMatcher qfier (i+1) 
   where
     lazyOrGreedyUpdate = case lG of
       Lazy   -> (nextStates <>)
       Greedy -> (<> nextStates)
-    nextStates = f state
+    nextStates = reMatcher state
 
 reMatchesChC :: ChC -> MatchProgress -> Maybe MatchProgress
 -- there must be at least one char for a character class to parse:
