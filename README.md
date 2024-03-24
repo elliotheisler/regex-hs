@@ -45,9 +45,9 @@ ghci> emails
 The functions `reMatch`, `reMatches`, `reMatchSearch`, and `reMatchesSearch` family of
 functions apply regular expressions, with `reMatchesSearch` doing the most work. 
 - reMatch stops the search at the first match,
-while reSearch*es* continues the backtracking search until all are found. 
+while `reSearches` continues the backtracking search until all are found. 
 - The
-reMatch(es)*Search* functions consider matches starting from all positions in the
+`reMatch(es)Search` functions consider matches starting from all positions in the
 string, as opposed to just the start.
 
 ```
@@ -106,9 +106,9 @@ Groups   : [CaptureGroup "outlook",CaptureGroup "ca"]
 ```
 ### Implemented Parts
 - The basics: unions, concatenation, and quantifiers
-- greedy and non-greediness for quantifiers
-- character classes
-- parenthesis to enforce precedence
-- some character class literals such as `\w` for word characters
-### Bugs
+- Greedy and non-greediness for quantifiers
+- Character classes
+- Parenthesis to enforce precedence
+- Some character class literals such as `\w` for word characters
+### Bugs and Features Not Yet Implemented
 see `BUGS.txt` in `src` directory
