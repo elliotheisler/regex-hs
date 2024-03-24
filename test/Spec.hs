@@ -8,7 +8,9 @@ import qualified HspecRETree.REMatch as REMatch
 
 main :: IO ()
 main = do
+    putStrLn "TESTING REGEX PARSING (using QuickCheck)\n========================================"
     quickCheckRegex
-    hspec $ RECompile.doSpec
-    hspec $ REMatch.doSpec
-    return ()
+    putStrLn "TESTING REGEX PARSING (using Hspec)\n========================================"
+    hspec RECompile.doSpec
+    putStrLn "TESTING REGEX EXECUTION (using HSpec)\n========================================"
+    hspec REMatch.doSpec

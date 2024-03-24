@@ -34,6 +34,8 @@ library
       Paths_regex_hs
   hs-source-dirs:
       src
+  default-extensions:
+      ViewPatterns
   build-depends:
       QuickCheck
     , base >=4.7 && <5
@@ -49,6 +51,8 @@ executable regex-hs-exe
       Paths_regex_hs
   hs-source-dirs:
       app
+  default-extensions:
+      ViewPatterns
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
@@ -71,6 +75,8 @@ test-suite regex-hs-test
       Paths_regex_hs
   hs-source-dirs:
       test
+  default-extensions:
+      ViewPatterns
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
