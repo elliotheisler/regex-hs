@@ -1,13 +1,16 @@
-module GHCIStuffs 
-    ( prs
-    , module E
-    ) where
+module GHCIStuffs
+  ( mkRegex,
+    module E,
+  )
+where
 
-import Regex
-import RETree
-import Text.Parsec
 import Data.Either as E
-prs :: String -> String
-prs = fromRight "_" . fmap show . (reCompile :: String -> Either ParseError RETree)
+import RETree
+import Regex
+import Text.Parsec
+
+-- reCompile wrapper for the CLI
+mkRegex :: String -> RETree
+mkRegex str = E.fromRight (error "invalid regular expression") (reCompile str)
 
 type ParseResult = Either ParseError
